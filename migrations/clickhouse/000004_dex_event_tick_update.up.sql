@@ -17,6 +17,9 @@ CREATE TABLE spacebox.dex_event_tick_update
     --       LP type ticks will have empty string TrancheKey values
     `TrancheKey` String,
     `Reserves` UInt128,
+    -- added after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
+    `SwapAmountIn` UInt256,
+    `SwapAmountOut` UInt256,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for token pair specific queries
@@ -49,7 +52,10 @@ CREATE MATERIALIZED VIEW spacebox.dex_event_tick_update_writer TO spacebox.dex_e
     `TickIndex` Int32,
     `Fee` UInt8,
     `TrancheKey` String,
-    `Reserves` UInt128
+    `Reserves` UInt128,
+    -- added after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
+    `SwapAmountIn` UInt256,
+    `SwapAmountOut` UInt256
 ) AS
     WITH
         -- define event_tuple parts for row fields
@@ -79,7 +85,10 @@ CREATE MATERIALIZED VIEW spacebox.dex_event_tick_update_writer TO spacebox.dex_e
             toUInt16OrZero(JSONExtractString(arrayLast(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value'))
         ) AS `Fee`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TrancheKey'), `event_attributes`), 'value') AS `TrancheKey`,
-        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Reserves'), `event_attributes`), 'value')) AS `Reserves`
+        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Reserves'), `event_attributes`), 'value')) AS `Reserves`,
+        -- add new fields after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
+        toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
+        toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`
     FROM spacebox.raw_block_results
     ARRAY JOIN (
         -- Combine all event types into one array

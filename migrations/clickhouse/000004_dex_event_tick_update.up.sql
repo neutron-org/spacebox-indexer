@@ -150,146 +150,221 @@ CREATE MATERIALIZED VIEW spacebox.dex_event_tick_update_writer TO spacebox.dex_e
                     (tx_result, tx_result_index) -> arrayMap(
                         (tx_result_code) -> arrayMap(
                             (tx_result_events, tx_result_events__types, tx_result_events__msg_index_attributes) -> arrayMap(
-                                (tx_result_event, tx_result_event_index) -> arrayMap(
-                                    (tick_update_event) -> arrayMap(
-                                        (tick_update_event_attributes) -> arrayMap(
-                                            (tx_result_related_msg_events) -> arrayMap(
-                                                (tx_result_related_msg_dex_spent_event, tx_result_related_msg_dex_received_event) -> (
-                                                    -- event_tuple.1: block_part_index
-                                                    2, -- set tx result events as block part 2
-                                                    -- event_tuple.2: tx_index
-                                                    tx_result_index,
-                                                    -- event_tuple.3: event_index
-                                                    tx_result_event_index,
-                                                    -- event_tuple.4: event_type
-                                                    JSONExtractString(tick_update_event, 'type'),
-                                                    -- event_tuple.5: event_attributes
-                                                    JSONExtractArrayRaw(tick_update_event, 'attributes'),
-                                                    -- event_tuple.6: is_swap
-                                                    notEmpty(tx_result_related_msg_dex_spent_event) AND
-                                                    notEmpty(tx_result_related_msg_dex_received_event) AND
-                                                    -- is_swap part: exclude if event denom is the related msg dex received denom
-                                                    (
-                                                        -- calculate related msg dex received denom
-                                                        regexpExtract(
-                                                            arrayFirst(
-                                                                (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
-                                                                -- separate out each denom in the coin event
-                                                                splitByChar(
-                                                                    ',',
-                                                                    JSONExtractString(
-                                                                        arrayFirst(
-                                                                            (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                                                            JSONExtractArrayRaw(tx_result_related_msg_dex_received_event, 'attributes')
-                                                                        ),
-                                                                        'value'
+                                (tx_result_wasm_dex_msg_regex_matches) -> arrayMap(
+                                    (tx_result_wasm_dex_msg_event_index_bounds) -> arrayMap(
+                                        (tx_result_event, tx_result_event_index) -> arrayMap(
+                                            (tick_update_event) -> arrayMap(
+                                                (tick_update_event_attributes, tx_result_wasm_dex_msg_event_index_lower_bound, tx_result_wasm_dex_msg_event_index_upper_bound) -> arrayMap(
+                                                    (tx_result_related_msg_events) -> arrayMap(
+                                                        (tx_result_related_msg_dex_spent_event, tx_result_related_msg_dex_received_event) -> (
+                                                            -- event_tuple.1: block_part_index
+                                                            2, -- set tx result events as block part 2
+                                                            -- event_tuple.2: tx_index
+                                                            tx_result_index,
+                                                            -- event_tuple.3: event_index
+                                                            tx_result_event_index,
+                                                            -- event_tuple.4: event_type
+                                                            JSONExtractString(tick_update_event, 'type'),
+                                                            -- event_tuple.5: event_attributes
+                                                            JSONExtractArrayRaw(tick_update_event, 'attributes'),
+                                                            -- event_tuple.6: is_swap
+                                                            notEmpty(tx_result_related_msg_dex_spent_event) AND
+                                                            notEmpty(tx_result_related_msg_dex_received_event) AND
+                                                            -- is_swap part: exclude if event denom is the related msg dex received denom
+                                                            (
+                                                                -- calculate related msg dex received denom
+                                                                regexpExtract(
+                                                                    arrayFirst(
+                                                                        (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
+                                                                        -- separate out each denom in the coin event
+                                                                        splitByChar(
+                                                                            ',',
+                                                                            JSONExtractString(
+                                                                                arrayFirst(
+                                                                                    (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
+                                                                                    JSONExtractArrayRaw(tx_result_related_msg_dex_received_event, 'attributes')
+                                                                                ),
+                                                                                'value'
+                                                                            )
+                                                                        )
+                                                                    ),
+                                                                    '^\\d+(.+)$',
+                                                                    1
+                                                                )
+                                                                -- compare against tick_update_event denom
+                                                                != JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenIn'), tick_update_event_attributes), 'value')
+                                                            )
+                                                        ),
+                                                        -- precompute tx_result_related_msg "fields" as arrayMap lambda arguments
+                                                        -- - tx_result_related_msg "field" tx_result_related_msg_dex_spent_event
+                                                        [arrayFirst(
+                                                            (tx_result_related_msg_event) -> (
+                                                                -- get first non-neutron/pool/ denom coin event
+                                                                arrayExists(
+                                                                    (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
+                                                                    -- separate out each denom in the coin event
+                                                                    splitByChar(
+                                                                        ',',
+                                                                        JSONExtractString(
+                                                                            arrayFirst(
+                                                                                (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
+                                                                                JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                                                            ),
+                                                                            'value'
+                                                                        )
                                                                     )
                                                                 )
                                                             ),
-                                                            '^\\d+(.+)$',
-                                                            1
-                                                        )
-                                                        -- compare against tick_update_event denom
-                                                        != JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenIn'), tick_update_event_attributes), 'value')
-                                                    )
+                                                            -- filter related msg events to 'coin_spent' events
+                                                            arrayFilter(
+                                                                (tx_result_related_msg_event) -> (
+                                                                    JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_spent' AND
+                                                                    arrayExists(
+                                                                        (tx_result_related_msg_event_attributes) -> (
+                                                                            JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'spender' AND
+                                                                            JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
+                                                                        ),
+                                                                        JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                                                    )
+                                                                ),
+                                                                tx_result_related_msg_events
+                                                            )
+                                                        )],
+                                                        -- - tx_result_related_msg "field" tx_result_related_msg_dex_received_event
+                                                        [arrayFirst(
+                                                            (tx_result_related_msg_event) -> (
+                                                                -- get first non-neutron/pool/ denom coin event
+                                                                arrayExists(
+                                                                    (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
+                                                                    -- separate out each denom in the coin event
+                                                                    splitByChar(
+                                                                        ',',
+                                                                        JSONExtractString(
+                                                                            arrayFirst(
+                                                                                (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
+                                                                                JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                                                            ),
+                                                                            'value'
+                                                                        )
+                                                                    )
+                                                                )
+                                                            ),
+                                                            -- filter related msg events to 'coin_received' events
+                                                            arrayFilter(
+                                                                (tx_result_related_msg_event) -> (
+                                                                    JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_received' AND
+                                                                    arrayExists(
+                                                                        (tx_result_related_msg_event_attributes) -> (
+                                                                            JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'receiver' AND
+                                                                            JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
+                                                                        ),
+                                                                        JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                                                    )
+                                                                ),
+                                                                tx_result_related_msg_events
+                                                            )
+                                                        )]
+                                                    ),
+                                                    -- pre-compute several tuple "fields" for is_swap computation
+                                                    -- - tx_result_related_msg "field" tx_result_related_msg_events
+                                                    [arrayFilter(
+                                                        -- filter tx_result_events to events that match the current event's msg_index_attributes
+                                                        (tx_result_related_event, tx_result_related_event_index) -> (
+                                                            -- matches CosmWasm sub-msg event index bounds
+                                                            tx_result_related_event_index >= tx_result_wasm_dex_msg_event_index_lower_bound AND
+                                                            tx_result_related_event_index < tx_result_wasm_dex_msg_event_index_upper_bound AND
+                                                            -- matches "msg_index" and "authz_msg_index" attributes
+                                                            tx_result_events__msg_index_attributes[tx_result_event_index] =
+                                                            tx_result_events__msg_index_attributes[tx_result_related_event_index]
+                                                        ),
+                                                        tx_result_events,
+                                                        arrayEnumerate(tx_result_events)
+                                                    )]
                                                 ),
-                                                -- precompute tx_result_related_msg "fields" as arrayMap lambda arguments
-                                                -- - tx_result_related_msg "field" tx_result_related_msg_dex_spent_event
-                                                [arrayFirst(
-                                                    (tx_result_related_msg_event) -> (
-                                                        -- get first non-neutron/pool/ denom coin event
-                                                        arrayExists(
-                                                            (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
-                                                            -- separate out each denom in the coin event
-                                                            splitByChar(
-                                                                ',',
-                                                                JSONExtractString(
-                                                                    arrayFirst(
-                                                                        (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                                                        JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
-                                                                    ),
-                                                                    'value'
-                                                                )
-                                                            )
-                                                        )
-                                                    ),
-                                                    -- filter related msg events to 'coin_spent' events
-                                                    arrayFilter(
-                                                        (tx_result_related_msg_event) -> (
-                                                            JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_spent' AND
-                                                            arrayExists(
-                                                                (tx_result_related_msg_event_attributes) -> (
-                                                                    JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'spender' AND
-                                                                    JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
-                                                                ),
-                                                                JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
-                                                            )
-                                                        ),
-                                                        tx_result_related_msg_events
-                                                    )
-                                                )],
-                                                -- - tx_result_related_msg "field" tx_result_related_msg_dex_received_event
-                                                [arrayFirst(
-                                                    (tx_result_related_msg_event) -> (
-                                                        -- get first non-neutron/pool/ denom coin event
-                                                        arrayExists(
-                                                            (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
-                                                            -- separate out each denom in the coin event
-                                                            splitByChar(
-                                                                ',',
-                                                                JSONExtractString(
-                                                                    arrayFirst(
-                                                                        (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                                                        JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
-                                                                    ),
-                                                                    'value'
-                                                                )
-                                                            )
-                                                        )
-                                                    ),
-                                                    -- filter related msg events to 'coin_received' events
-                                                    arrayFilter(
-                                                        (tx_result_related_msg_event) -> (
-                                                            JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_received' AND
-                                                            arrayExists(
-                                                                (tx_result_related_msg_event_attributes) -> (
-                                                                    JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'receiver' AND
-                                                                    JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
-                                                                ),
-                                                                JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
-                                                            )
-                                                        ),
-                                                        tx_result_related_msg_events
-                                                    )
-                                                )]
+                                                -- pre-compute tick_update_event "fields" as arrayMap lambda arguments
+                                                -- - tick_update_event "field" tick_update_event_attributes
+                                                [JSONExtractArrayRaw(tick_update_event, 'attributes')],
+                                                -- - tick_update_event "field" tx_result_wasm_dex_msg_event_index_lower_bound
+                                                [arrayLast(i -> i <= tx_result_event_index, tx_result_wasm_dex_msg_event_index_bounds)],
+                                                -- - tick_update_event "field" tx_result_wasm_dex_msg_event_index_upper_bound
+                                                [arrayFirst(i -> i > tx_result_event_index, tx_result_wasm_dex_msg_event_index_bounds)]
                                             ),
-                                            -- pre-compute several tuple "fields" for is_swap computation
-                                            -- - tx_result_related_msg "field" tx_result_related_msg_events
-                                            [arrayFilter(
-                                                -- filter tx_result_events to events that match the current event's msg_index_attributes
-                                                (tx_result_related_event, tx_result_related_event_index) -> (
-                                                    -- matches "msg_index" and "authz_msg_index" attributes
-                                                    tx_result_events__msg_index_attributes[tx_result_event_index] =
-                                                    tx_result_events__msg_index_attributes[tx_result_related_event_index]
-                                                ),
-                                                tx_result_events,
-                                                arrayEnumerate(tx_result_events)
-                                            )]
+                                            -- filter to only TickUpdate events
+                                            arrayFilter(
+                                                tx_result_event -> JSONExtractString(tx_result_event, 'type') = 'TickUpdate',
+                                                [tx_result_event]
+                                            )
                                         ),
-                                        -- pre-compute tick_update_event "fields" as arrayMap lambda arguments
-                                        -- - tick_update_event "field" tick_update_event_attributes
-                                        [JSONExtractArrayRaw(tick_update_event, 'attributes')]
+                                        -- enumerate all events within a tx_result
+                                        -- enumerate each (tx_result_event, tx_result_event_index) within a txs_results
+                                        tx_result_events,
+                                        arrayEnumerate(tx_result_events)
                                     ),
-                                    -- filter to only TickUpdate events
-                                    arrayFilter(
-                                        tx_result_event -> JSONExtractString(tx_result_event, 'type') = 'TickUpdate',
-                                        [tx_result_event]
-                                    )
+                                    -- precompute tx_result "fields" as arrayMap lambda arguments
+                                    -- - tx_result "field" tx_result_wasm_dex_msg_event_index_bounds
+                                    [arraySort(
+                                        arrayFlatten([
+                                            -- include tx events ends
+                                            [1, length(tx_result_events) + 1],
+                                            -- find msg event bounds within wasm actions
+                                            arrayMap(
+                                                (match, match_count_index) -> (
+                                                    arrayFilter(
+                                                        i -> arraySlice(tx_result_events__types, i, length(splitByChar(',', match))) = splitByChar(',', match),
+                                                        arrayEnumerate(tx_result_events__types)
+                                                    )[match_count_index]
+                                                ),
+                                                tx_result_wasm_dex_msg_regex_matches,
+                                                -- find the "match_count_index" number of the each match string by counting the number of previously seen matching match strings
+                                                -- (eg. if a PlaceLimitOrder match was detected, is it PlaceLimitOrder 1 or 2 or N?)
+                                                arrayMap(
+                                                    (match, i) -> arrayCount(x -> x = match, arraySlice(tx_result_wasm_dex_msg_regex_matches, 1, i - 1)) + 1,
+                                                    tx_result_wasm_dex_msg_regex_matches,
+                                                    arrayEnumerate(tx_result_wasm_dex_msg_regex_matches)
+                                                )
+                                            )
+                                        ])
+                                    )]
                                 ),
-                                -- enumerate all events within a tx_result
-                                -- enumerate each (tx_result_event, tx_result_event_index) within a txs_results
-                                tx_result_events,
-                                arrayEnumerate(tx_result_events)
+                                -- precompute tx_result "fields" as arrayMap lambda arguments
+                                -- - tx_result "field" tx_result_wasm_dex_msg_regex_matches
+                                [
+                                    if(
+                                        has(tx_result_events__types, 'TickUpdate') AND
+                                        has(tx_result_events__types, 'wasm'),
+                                        arrayFilter(
+                                            x -> notEmpty(x),
+                                            arrayFlatten(
+                                                -- compare tx event types array as string against tx msg detection regex
+                                                -- to find where the sub-msgs are in each CosmWasm tx `events` list
+                                                extractAllGroupsHorizontal(
+                                                    arrayStringConcat(tx_result_events__types, ','),
+                                                    -- note: this is a msg action detection regex, it can determine which Dex v5 msg was used to create this order of events
+                                                    --       msgs: https://github.com/neutron-org/neutron/blob/v5.1.3/proto/neutron/dex/tx.proto#L16-L28
+                                                    arrayStringConcat([
+                                                        '(',
+                                                        arrayStringConcat([
+                                                            -- MsgDeposit
+                                                            '(?:message,)?(?:(?:neutron,)?(?:neutron,)?(?:TickUpdate)?,TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer(?:,message)?',
+                                                            -- MsgWithdrawal
+                                                            '(?:message,)?(?:(?:neutron,)?TickUpdate,)+(?:message,)*coin_spent,coin_received,transfer,(?:message,)?coin_spent,burn,coin_spent,coin_received,transfer(?:,message)?,neutron',
+                                                            -- MsgPlaceLimitOrder
+                                                            '(?:message,)?(?:(?:neutron,)?TickUpdate(?:,TickUpdate)?,)*neutron,(?:neutron,)?(?:TickUpdate,)?TrancheUserUpdate,(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?',
+                                                            -- MsgWithdrawFilledLimitOrder
+                                                            -- (unused) '(?:message,)?TrancheUserUpdate,coin_spent,coin_received,transfer(?:,message)?(?:,message)?',
+                                                            -- MsgCancelLimitOrder
+                                                            '(?:message,)?(?:TrancheUserUpdate,(?:neutron,)?TickUpdate,)+(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?(?:,message)?',
+                                                            -- MsgMultiHopSwap
+                                                            '(?:message,)?(?:(?:neutron,)?TickUpdate(?:,TickUpdate)?,)*neutron,(?:TickUpdate,)?coin_spent,coin_received,transfer,(?:message,)?coin_spent,coin_received,transfer(?:,message)?'
+                                                        ], ')|('),
+                                                        ')'
+                                                    ], '')
+                                                )
+                                            )
+                                        ),
+                                        []
+                                    )
+                                ]
                             ),
                             -- precompute tx_result "fields" as arrayMap lambda arguments
                             -- - tx_result "field" tx_result_events

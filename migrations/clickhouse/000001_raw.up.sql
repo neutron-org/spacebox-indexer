@@ -41,6 +41,34 @@ SELECT JSONExtractInt(message, 'block', 'header', 'height')                     
 FROM spacebox.raw_block_topic
 GROUP BY height, hash, num_txs, total_gas, proposer_address, timestamp, signatures;
 
+-- spacebox.raw_block_txhash definition
+
+CREATE TABLE spacebox.raw_block_txhash
+(
+    `height`           UInt64,
+    `tx_index`         UInt32,
+    `tx_hash`          String,
+    `timestamp`        DATETIME
+)
+    ENGINE = ReplacingMergeTree
+        ORDER BY (height, tx_index, timestamp)
+        SETTINGS index_granularity = 8192;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS raw_block_txhash_consumer TO spacebox.raw_block_txhash AS
+SELECT JSONExtractInt(message, 'block', 'header', 'height')                                 AS height,
+       tx_index,
+       tx_hash,
+       parseDateTimeBestEffortOrZero(JSONExtractString(message, 'block', 'header', 'time')) AS timestamp
+FROM spacebox.raw_block_topic
+--  get tx hashes in the correct block order
+ARRAY JOIN
+    arrayMap(
+        txBase64 -> hex(SHA256(base64Decode(JSONExtractString(txBase64)))),
+        JSONExtractArrayRaw(message, 'block', 'data', 'txs')
+    ) as tx_hash,
+    arrayEnumerate(JSONExtractArrayRaw(message, 'block', 'data', 'txs')) as tx_index
+GROUP BY height, tx_index, tx_hash, timestamp;
+
 -- spacebox.raw_block_results_topic definition
 
 CREATE TABLE spacebox.raw_block_results_topic

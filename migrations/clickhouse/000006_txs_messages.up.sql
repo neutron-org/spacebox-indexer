@@ -8,6 +8,7 @@ CREATE TABLE spacebox.txs_messages
     `msg_part_index` UInt16,
     `msg_indexes` Array(UInt16),
     -- event data
+    `msg_events_index_offset` UInt32,
     `msg_events` Array(String)
 )
 ENGINE = ReplacingMergeTree
@@ -29,6 +30,7 @@ CREATE MATERIALIZED VIEW spacebox.txs_messages_writer TO spacebox.txs_messages
     `msg_part_index` UInt16,
     `msg_indexes` Array(UInt16),
     -- event data
+    `msg_events_index_offset` UInt32,
     `msg_events` Array(String)
 ) AS
 WITH
@@ -36,13 +38,15 @@ WITH
     tx_result_tuple.1 as `tx_index`,
     tx_result_tuple.2 as `msg_part_index`,
     tx_result_tuple.3 as `msg_indexes`,
-    tx_result_tuple.4 as `msg_events`
+    tx_result_tuple.4 as `msg_events_index_offset`,
+    tx_result_tuple.5 as `msg_events`
 SELECT
     `timestamp`,
     `height`,
     `tx_index`,
     `msg_part_index`,
     `msg_indexes`,
+    `msg_events_index_offset`,
     `msg_events`
 FROM
     spacebox.raw_block_results
@@ -57,9 +61,27 @@ FROM
                                 if (
                                     acc[-1].3 = tx_result_event__msg_indexes,
                                     -- Append event to the last group of events
-                                    arrayConcat(arrayPopBack(acc), [(acc[-1].1, acc[-1].2, acc[-1].3, arrayConcat(acc[-1].4, [tx_result_event]))]),
+                                    arrayConcat(
+                                        arrayPopBack(acc),
+                                        [(
+                                            acc[-1].1,
+                                            acc[-1].2,
+                                            acc[-1].3,
+                                            acc[-1].4,
+                                            arrayConcat(acc[-1].5, [tx_result_event])
+                                        )]
+                                    ),
                                     -- Otherwise, create a new group
-                                    arrayConcat(acc, [(tx_result_index, toUInt16(acc[-1].2 + 1), tx_result_event__msg_indexes, [tx_result_event])])
+                                    arrayConcat(
+                                        acc,
+                                        [(
+                                            tx_result_index,
+                                            toUInt16(acc[-1].2 + 1),
+                                            tx_result_event__msg_indexes,
+                                            toUInt32(acc[-1].4 + length(acc[-1].5)),
+                                            [tx_result_event]
+                                        )]
+                                    )
                                 )
                             ),
                             -- fold (reduce) over subsequent message events
@@ -75,7 +97,9 @@ FROM
                                 toUInt16(0),
                                 -- tx_result_tuple.3: msg_indexes
                                 tx_result_events__msg_indexes[1],
-                                -- tx_result_tuple.4: msg_events
+                                -- tx_result_tuple.4: msg_events_index_offset
+                                toUInt32(0),
+                                -- tx_result_tuple.5: msg_events
                                 [tx_result_events[1]]
                             )]
                         ),

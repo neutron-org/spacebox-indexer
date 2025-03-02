@@ -51,20 +51,37 @@ FROM
         arrayFlatten(
             arrayMap(
                 (tx_result, tx_result_index) -> arrayMap(
-                    (tx_result_code) -> arrayFold(
-                        (acc, tx_result_event, tx_result_event__msg_indexes) -> (
-                            if (
-                                acc[-1].3 = tx_result_event__msg_indexes,
-                                -- Append event to the last group of events
-                                arrayConcat(arrayPopBack(acc), [(acc[-1].1, acc[-1].2, acc[-1].3, arrayConcat(acc[-1].4, [tx_result_event]))]),
-                                -- Otherwise, create a new group
-                                arrayConcat(acc, [(tx_result_index, toUInt32(acc[-1].2 + 1), tx_result_event__msg_indexes, [tx_result_event])])
-                            )
+                    (tx_result_events) -> arrayMap(
+                        (tx_result_events__msg_indexes) -> arrayFold(
+                            (acc, tx_result_event, tx_result_event__msg_indexes) -> (
+                                if (
+                                    acc[-1].3 = tx_result_event__msg_indexes,
+                                    -- Append event to the last group of events
+                                    arrayConcat(arrayPopBack(acc), [(acc[-1].1, acc[-1].2, acc[-1].3, arrayConcat(acc[-1].4, [tx_result_event]))]),
+                                    -- Otherwise, create a new group
+                                    arrayConcat(acc, [(tx_result_index, toUInt32(acc[-1].2 + 1), tx_result_event__msg_indexes, [tx_result_event])])
+                                )
+                            ),
+                            -- fold (reduce) over subsequent message events
+                            -- - tx_result_event "field" tx_result_event
+                            arrayPopFront(tx_result_events),
+                            -- - tx_result_event "field" tx_result_event__msg_indexes
+                            arrayPopFront(tx_result_events__msg_indexes),
+                            -- create arrayFold initial value from first event
+                            [(
+                                -- tx_result_tuple.1: tx_index
+                                tx_result_index,
+                                -- tx_result_tuple.2: msg_part_index
+                                toUInt32(0),
+                                -- tx_result_tuple.3: msg_indexes
+                                tx_result_events__msg_indexes[1],
+                                -- tx_result_tuple.4: msg_events
+                                [tx_result_events[1]]
+                            )]
                         ),
-                        -- fold (reduce) over message events
-                        arrayPopFront(JSONExtractArrayRaw(tx_result, 'events')),
-                        -- - tx_result_event "field" tx_result_event__msg_indexes
-                        arrayMap(
+                        -- precompute tx_result "fields" as arrayMap lambda arguments
+                        -- - tx_result "field" tx_result_events__msg_indexes
+                        [arrayMap(
                             (tx_result_event) -> arrayMap(
                                 (attr) -> JSONExtractUInt(attr, 'value'),
                                 arrayFilter(
@@ -72,28 +89,13 @@ FROM
                                     JSONExtractArrayRaw(tx_result_event, 'attributes')
                                 )
                             ),
-                            arrayPopFront(JSONExtractArrayRaw(tx_result, 'events'))
-                        ),
-                        [(
-                            -- tx_result_tuple.1: tx_index
-                            tx_result_index,
-                            -- tx_result_tuple.2: msg_part_index
-                            toUInt32(0),
-                            -- tx_result_tuple.3: msg_indexes
-                            arrayMap(
-                                (attr) -> JSONExtractUInt(attr, 'value'),
-                                arrayFilter(
-                                    attr -> endsWith(JSONExtractString(attr, 'key'), 'msg_index'),
-                                    JSONExtractArrayRaw(JSONExtractArrayRaw(tx_result, 'events')[1], 'attributes')
-                                )
-                            ),
-                            -- tx_result_tuple.4: msg_events
-                            [JSONExtractArrayRaw(tx_result, 'events')[1]]
+                            tx_result_events
                         )]
                     ),
                     -- filter to only successful transactions
                     arrayFilter(
-                        (tx_result_code) -> tx_result_code = 0,
+                        (tx_result_events, tx_result_code) -> tx_result_code = 0,
+                        [JSONExtractArrayRaw(tx_result, 'events')],
                         [JSONExtractUInt(tx_result, 'code')]
                     )
                 ),

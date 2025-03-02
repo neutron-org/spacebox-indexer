@@ -84,12 +84,14 @@ FROM
                         [arrayMap(
                             (tx_result_event) -> arrayMap(
                                 (attr) -> JSONExtractUInt(attr, 'value'),
-                                arraySlice(
-                                    JSONExtractArrayRaw(tx_result_event, 'attributes'),
-                                    arrayLastIndex(
-                                        attr -> not(endsWith(JSONExtractString(attr, 'key'), 'msg_index')),
-                                        JSONExtractArrayRaw(tx_result_event, 'attributes')
-                                    ) + 1
+                                arrayReverse(
+                                    arraySlice(
+                                        JSONExtractArrayRaw(tx_result_event, 'attributes'),
+                                        arrayLastIndex(
+                                            attr -> not(endsWith(JSONExtractString(attr, 'key'), 'msg_index')),
+                                            JSONExtractArrayRaw(tx_result_event, 'attributes')
+                                        ) + 1
+                                    )
                                 )
                             ),
                             tx_result_events

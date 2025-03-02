@@ -5,8 +5,8 @@ CREATE TABLE spacebox.txs_messages
     `height` UInt64,
     `tx_index` UInt32,
     -- msg data
-    `msg_part_index` UInt32,
-    `msg_indexes` Array(UInt32),
+    `msg_part_index` UInt16,
+    `msg_indexes` Array(UInt16),
     -- event data
     `msg_events` Array(String)
 )
@@ -26,8 +26,8 @@ CREATE MATERIALIZED VIEW spacebox.txs_messages_writer TO spacebox.txs_messages
     `height` UInt64,
     `tx_index` UInt32,
     -- msg data
-    `msg_part_index` UInt32,
-    `msg_indexes` Array(UInt32),
+    `msg_part_index` UInt16,
+    `msg_indexes` Array(UInt16),
     -- event data
     `msg_events` Array(String)
 ) AS
@@ -59,7 +59,7 @@ FROM
                                     -- Append event to the last group of events
                                     arrayConcat(arrayPopBack(acc), [(acc[-1].1, acc[-1].2, acc[-1].3, arrayConcat(acc[-1].4, [tx_result_event]))]),
                                     -- Otherwise, create a new group
-                                    arrayConcat(acc, [(tx_result_index, toUInt32(acc[-1].2 + 1), tx_result_event__msg_indexes, [tx_result_event])])
+                                    arrayConcat(acc, [(tx_result_index, toUInt16(acc[-1].2 + 1), tx_result_event__msg_indexes, [tx_result_event])])
                                 )
                             ),
                             -- fold (reduce) over subsequent message events
@@ -72,7 +72,7 @@ FROM
                                 -- tx_result_tuple.1: tx_index
                                 tx_result_index,
                                 -- tx_result_tuple.2: msg_part_index
-                                toUInt32(0),
+                                toUInt16(0),
                                 -- tx_result_tuple.3: msg_indexes
                                 tx_result_events__msg_indexes[1],
                                 -- tx_result_tuple.4: msg_events

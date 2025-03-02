@@ -78,7 +78,7 @@ FROM
                                             tx_result_index,
                                             toUInt16(acc[-1].2 + 1),
                                             tx_result_event__msg_indexes,
-                                            toUInt32(acc[-1].4 + length(acc[-1].5)),
+                                            toUInt32(acc[-1].4 + if(empty(acc[-1].3), 0, length(acc[-1].5))),
                                             [tx_result_event]
                                         )]
                                     )

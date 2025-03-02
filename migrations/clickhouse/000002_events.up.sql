@@ -22,12 +22,9 @@ SELECT
     JSONExtractString(`event`, 'type') AS `type`,
     JSONExtractString(`event`, 'attributes') AS `attributes`
 FROM
-    spacebox.raw_block_results
+    spacebox.raw_transaction
     ARRAY JOIN (
-        JSONExtractArrayRaw(`txs_results`)
-    ) as `result`
-    ARRAY JOIN (
-        JSONExtractArrayRaw(`result`, 'events')
+        JSONExtractArrayRaw(`events`)
     ) as `event`
 ;
 

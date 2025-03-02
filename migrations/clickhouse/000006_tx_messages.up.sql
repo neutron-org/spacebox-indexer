@@ -108,4 +108,6 @@ FROM
             )
         )
     ) AS `tx_result_tuple`
-;
+SETTINGS
+    -- split query execution into small chunks to reduce peak memory usage
+    max_block_size = 50;

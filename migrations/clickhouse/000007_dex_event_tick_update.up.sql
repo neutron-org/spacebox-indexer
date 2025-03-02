@@ -1,3 +1,159 @@
+
+CREATE TABLE spacebox.dex_txs_messages
+(
+    `timestamp` DateTime,
+    `height` UInt64,
+    `tx_index` UInt32,
+    -- msg data
+    `msg_part_index` UInt16,
+    `msg_indexes` Array(UInt16),
+    -- wasm msg data
+    `wasm_part_index` UInt16,
+    -- event data
+    `msg_events` Array(String)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (
+    height,
+    tx_index,
+    msg_part_index
+)
+SETTINGS index_granularity = 8192;
+
+-- spacebox.dex_txs_messages_writer source
+
+CREATE MATERIALIZED VIEW spacebox.dex_txs_messages_writer TO spacebox.dex_txs_messages
+(
+    `timestamp` DateTime,
+    `height` UInt64,
+    `tx_index` UInt32,
+    -- msg data
+    `msg_part_index` UInt16,
+    `msg_indexes` Array(UInt16),
+    -- wasm msg data
+    `wasm_part_index` UInt16,
+    -- event data
+    `msg_part_events` Array(String)
+) AS
+WITH
+    -- define join tuple parts for row fields
+    tx_message_tuple.1 as `wasm_part_index`,
+    tx_message_tuple.2 as `msg_part_events`
+SELECT
+    `timestamp`,
+    `height`,
+    `tx_index`,
+    `msg_part_index`,
+    `msg_indexes`,
+    `wasm_part_index`,
+    `msg_part_events`
+FROM
+    spacebox.txs_messages
+    ARRAY JOIN (
+        -- Extract "DEX wasm event fingerprint" from events to extract wasm msg events
+        arrayFlatten(
+            arrayMap(
+                (msg_events__types) -> arrayMap(
+                    (msg_events__wasm_dex_msg_event_indexes) -> arrayMap(
+                        (wasm_dex_msg_event_index_lower_bound, wasm_dex_msg_event_index_upper_bound, wasm_part_index) -> (
+                            -- tx_message_tuple.1: wasm_part_index
+                            toUInt16(wasm_part_index - 1),
+                            -- tx_message_tuple.2: msg_part_events
+                            arraySlice(
+                                `msg_events`,
+                                wasm_dex_msg_event_index_lower_bound,
+                                wasm_dex_msg_event_index_upper_bound - wasm_dex_msg_event_index_lower_bound
+                            )
+                        ),
+                        -- pass start of bounds
+                        arrayConcat([1], msg_events__wasm_dex_msg_event_indexes),
+                        -- pass end of bounds
+                        arrayConcat(msg_events__wasm_dex_msg_event_indexes, [length(msg_events__types) + 1]),
+                        -- wasm_part_index 
+                        arrayEnumerate(arrayConcat([1], msg_events__wasm_dex_msg_event_indexes))
+                    ),
+                    arrayMap(
+                        -- precompute msg_events "fields" as arrayMap lambda arguments
+                        -- - msg_events "field" msg_events__wasm_dex_msg_event_indexes
+                        (msg_events__wasm_dex_msg_regex_matches) -> arraySort(
+                            arrayFlatten(
+                                -- find msg event bounds within wasm actions
+                                arrayMap(
+                                    (match, match_count_index) -> (
+                                        arrayFilter(
+                                            i -> arraySlice(msg_events__types, i, length(splitByChar(',', match))) = splitByChar(',', match),
+                                            arrayEnumerate(msg_events__types)
+                                        )[match_count_index]
+                                    ),
+                                    msg_events__wasm_dex_msg_regex_matches,
+                                    -- find the "match_count_index" number of the each match string by counting the number of previously seen matching match strings
+                                    -- (eg. if a PlaceLimitOrder match was detected, is it PlaceLimitOrder 1 or 2 or N?)
+                                    arrayMap(
+                                        (match, i) -> arrayCount(x -> x = match, arraySlice(msg_events__wasm_dex_msg_regex_matches, 1, i - 1)) + 1,
+                                        msg_events__wasm_dex_msg_regex_matches,
+                                        arrayEnumerate(msg_events__wasm_dex_msg_regex_matches)
+                                    )
+                                )
+                            )
+                        ),
+                        -- precompute msg_events "fields" as arrayMap lambda arguments
+                        -- - msg_events "field" msg_events__wasm_dex_msg_regex_matches
+                        [
+                            if(
+                                has(msg_events__types, 'TickUpdate') AND
+                                has(msg_events__types, 'wasm'),
+                                arrayFilter(
+                                    x -> notEmpty(x),
+                                    arrayFlatten(
+                                        -- compare tx event types array as string against tx msg detection regex
+                                        -- to find where the sub-msgs are in each CosmWasm tx `events` list
+                                        extractAllGroupsHorizontal(
+                                            arrayStringConcat(msg_events__types, ','),
+                                            -- note: this is a msg action detection regex, it can determine which Dex v5 msg was used to create this order of events
+                                            --       msgs: https://github.com/neutron-org/neutron/blob/v5.1.3/proto/neutron/dex/tx.proto#L16-L28
+                                            arrayStringConcat(
+                                                [
+                                                    '(',
+                                                    arrayStringConcat([
+                                                        -- MsgDeposit
+                                                        '(?:message,)?(?:(?:neutron,)?(?:neutron,)?(?:TickUpdate)?,TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer(?:,message)?',
+                                                        -- MsgWithdrawal
+                                                        '(?:message,)?(?:(?:neutron,)?TickUpdate,)+(?:message,)*coin_spent,coin_received,transfer,(?:message,)?coin_spent,burn,coin_spent,coin_received,transfer(?:,message)?,neutron',
+                                                        -- MsgPlaceLimitOrder
+                                                        '(?:message,)?(?:(?:neutron,)?TickUpdate(?:,TickUpdate)?,)*neutron,(?:neutron,)?(?:TickUpdate,)?TrancheUserUpdate,(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?',
+                                                        -- MsgWithdrawFilledLimitOrder
+                                                        -- (unused) '(?:message,)?TrancheUserUpdate,coin_spent,coin_received,transfer(?:,message)?(?:,message)?',
+                                                        -- MsgCancelLimitOrder
+                                                        '(?:message,)?(?:TrancheUserUpdate,(?:neutron,)?TickUpdate,)+(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?(?:,message)?',
+                                                        -- MsgMultiHopSwap
+                                                        '(?:message,)?(?:(?:neutron,)?TickUpdate(?:,TickUpdate)?,)*neutron,(?:TickUpdate,)?coin_spent,coin_received,transfer,(?:message,)?coin_spent,coin_received,transfer(?:,message)?'
+                                                    ], ')|('),
+                                                    ')'
+                                                ],
+                                                ''
+                                            )
+                                        )
+                                    )
+                                ),
+                                []
+                            )
+                        ]
+                    )
+                ),
+                -- precompute msg_events "fields" as arrayMap lambda arguments
+                -- - msg_events "field" msg_events__types
+                [arrayMap(
+                    (msg_event) -> JSONExtractString(msg_event, 'type'),
+                    msg_events
+                )]
+            )
+        )
+    ) AS `tx_message_tuple`
+SETTINGS
+    -- split query execution into small chunks to reduce peak memory usage
+    max_block_size = 50;
+
+
 CREATE TABLE spacebox.dex_event_tick_update
 (
     `timestamp` DateTime,

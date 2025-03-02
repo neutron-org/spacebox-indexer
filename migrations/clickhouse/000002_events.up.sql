@@ -17,43 +17,19 @@ CREATE MATERIALIZED VIEW spacebox.txs_events_writer TO spacebox.txs_events
     `type` String,
     `attributes` String
 ) AS
-SELECT *
+SELECT
+    `height`,
+    JSONExtractString(`event`, 'type') AS `type`,
+    JSONExtractString(`event`, 'attributes') AS `attributes`
 FROM
-(
-    SELECT
-        height,
-        JSONExtractString(
-            arrayJoin(
-                JSONExtractArrayRaw(
-                    JSONExtractString(
-                        arrayJoin(
-                            JSONExtractArrayRaw(
-                                JSONExtractString(txs_results)
-                            )
-                        ),
-                        'events'
-                    )
-                )
-            ),
-            'type'
-        ) AS type,
-        JSONExtractString(
-            arrayJoin(
-                JSONExtractArrayRaw(
-                    JSONExtractString(
-                        arrayJoin(
-                            JSONExtractArrayRaw(
-                                JSONExtractString(txs_results)
-                            )
-                        ),
-                        'events'
-                    )
-                )
-            ),
-            'attributes'
-        ) AS attributes
-    FROM spacebox.raw_block_results
-);
+    spacebox.raw_block_results
+    ARRAY JOIN (
+        JSONExtractArrayRaw(`txs_results`)
+    ) as `result`
+    ARRAY JOIN (
+        JSONExtractArrayRaw(`result`, 'events')
+    ) as `event`
+;
 
 -- spacebox.wasm_txs_events definition
 
@@ -89,46 +65,29 @@ CREATE MATERIALIZED VIEW spacebox.wasm_txs_events_writer TO spacebox.wasm_txs_ev
     `action` String,
     `attributes` String
 ) AS
-WITH events AS
-    (
-        SELECT
-            timestamp,
-            height,
-            txhash,
-            signer,
-            JSONExtractString(
-                arrayJoin(
-                    JSONExtractArrayRaw(events)
-                ),
-                'type'
-            ) AS type,
-            JSONExtractString(
-                arrayJoin(
-                    JSONExtractArrayRaw(events)
-                ),
-                'attributes'
-            ) AS attributes
-        FROM spacebox.raw_transaction
-    )
 SELECT
-    timestamp,
-    height,
-    txhash,
-    signer,
+    `timestamp`,
+    `height`,
+    `txhash`,
+    `signer`,
     JSONExtractString(
-        arrayFilter(
+        arrayFirst(
             x -> (JSONExtractString(x, 'key') = '_contract_address'),
-            JSONExtractArrayRaw(attributes)
-        )[1],
+            JSONExtractArrayRaw(`attributes`)
+        ),
         'value'
-    ) AS contract_address,
+    ) AS `contract_address`,
     JSONExtractString(
-        arrayFilter(
+        arrayFirst(
             x -> (JSONExtractString(x, 'key') = 'action'),
-            JSONExtractArrayRaw(attributes)
-        )[1],
+            JSONExtractArrayRaw(`attributes`)
+        ),
         'value'
     ) AS action,
-    attributes
-FROM events
-WHERE type = 'wasm';
+    JSONExtractString(`event`, 'attributes') as `attributes`
+FROM
+    spacebox.raw_transaction
+    ARRAY JOIN (
+        JSONExtractArrayRaw(`events`)
+    ) as `event`
+WHERE JSONExtractString(`event`, 'type') = 'wasm';

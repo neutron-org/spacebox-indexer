@@ -377,128 +377,144 @@ CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.d
         -- Extract "txs_results" events with tx_index
         arrayFlatten(
             arrayMap(
-                (msg_part_event, msg_part_event_index) -> arrayMap(
-                    (tick_update_event) -> arrayMap(
-                        (tx_result_related_msg_dex_spent_event, tx_result_related_msg_dex_received_event) -> (
-                            -- event_tuple.1: event_index
-                            toUInt32(`msg_part_events_index_offset` + msg_part_event_index - 1),
-                            -- event_tuple.2: event_type
-                            JSONExtractString(tick_update_event, 'type'),
-                            -- event_tuple.3: event_attributes
-                            JSONExtractArrayRaw(tick_update_event, 'attributes'),
-                            -- event_tuple.4: is_swap
-                            notEmpty(tx_result_related_msg_dex_spent_event) AND
-                            notEmpty(tx_result_related_msg_dex_received_event) AND
-                            -- is_swap part: exclude if event denom is the related msg dex received denom
-                            (
-                                -- calculate related msg dex received denom
-                                regexpExtract(
-                                    arrayFirst(
-                                        (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
-                                        -- separate out each denom in the coin event
-                                        splitByChar(
-                                            ',',
-                                            JSONExtractString(
-                                                arrayFirst(
-                                                    (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                                    JSONExtractArrayRaw(tx_result_related_msg_dex_received_event, 'attributes')
-                                                ),
-                                                'value'
-                                            )
-                                        )
-                                    ),
-                                    '^\\d+(.+)$',
-                                    1
+                (dex_msg_part_events) -> arrayMap(
+                    (tx_result_related_msg_dex_spent_event, tx_result_related_msg_dex_received_event) -> arrayMap(
+                        (tx_result_related_msg_dex_received_denom) -> arrayMap(
+                            (msg_part_event, msg_part_event_index) -> arrayMap(
+                                (tick_update_event) -> (
+                                    -- event_tuple.1: event_index
+                                    toUInt32(`msg_part_events_index_offset` + msg_part_event_index - 1),
+                                    -- event_tuple.2: event_type
+                                    JSONExtractString(tick_update_event, 'type'),
+                                    -- event_tuple.3: event_attributes
+                                    JSONExtractArrayRaw(tick_update_event, 'attributes'),
+                                    -- event_tuple.4: is_swap
+                                    notEmpty(tx_result_related_msg_dex_received_denom) AND
+                                    -- is_swap part: exclude if event denom is the related msg dex received denom
+                                    tx_result_related_msg_dex_received_denom != JSONExtractString(
+                                        arrayFirst(
+                                            x -> JSONExtractString(x, 'key') = 'TokenIn',
+                                            JSONExtractArrayRaw(tick_update_event, 'attributes')
+                                        ),
+                                        'value'
+                                    )
+                                ),
+                                -- filter to only TickUpdate events
+                                arrayFilter(
+                                    msg_part_event -> JSONExtractString(msg_part_event, 'type') = 'TickUpdate',
+                                    [msg_part_event]
                                 )
-                                -- compare against tick_update_event denom
-                                != JSONExtractString(
-                                    arrayFirst(
-                                        x -> JSONExtractString(x, 'key') = 'TokenIn',
-                                        JSONExtractArrayRaw(tick_update_event, 'attributes')
-                                    ),
-                                    'value'
+                            ),
+                            -- enumerate each (msg_part_event, msg_part_event_index) within a txs_result_msg_part
+                            dex_msg_part_events,
+                            arrayEnumerate(dex_msg_part_events)
+                        ),
+                        -- precompute tx_result_related_msg "fields" as arrayMap lambda arguments
+                        -- - tx_result_related_msg "field" tx_result_related_msg_dex_received_denom
+                        [if(
+                            notEmpty(tx_result_related_msg_dex_spent_event) AND
+                            notEmpty(tx_result_related_msg_dex_received_event),
+                            -- calculate related msg dex received denom
+                            regexpExtract(
+                                arrayFirst(
+                                    (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
+                                    -- separate out each denom in the coin event
+                                    splitByChar(
+                                        ',',
+                                        JSONExtractString(
+                                            arrayFirst(
+                                                (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
+                                                JSONExtractArrayRaw(tx_result_related_msg_dex_received_event, 'attributes')
+                                            ),
+                                            'value'
+                                        )
+                                    )
+                                ),
+                                '^\\d+(.+)$',
+                                1
+                            ),
+                            ''
+                        )]
+                    ),
+                    -- precompute tx_result_related_msg "fields" as arrayMap lambda arguments
+                    -- - tx_result_related_msg "field" tx_result_related_msg_dex_spent_event
+                    [arrayFirst(
+                        (tx_result_related_msg_event) -> (
+                            -- get first non-neutron/pool/ denom coin event
+                            arrayExists(
+                                (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
+                                -- separate out each denom in the coin event
+                                splitByChar(
+                                    ',',
+                                    JSONExtractString(
+                                        arrayFirst(
+                                            (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
+                                            JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                        ),
+                                        'value'
+                                    )
                                 )
                             )
                         ),
-                        -- precompute tx_result_related_msg "fields" as arrayMap lambda arguments
-                        -- - tx_result_related_msg "field" tx_result_related_msg_dex_spent_event
-                        [arrayFirst(
+                        -- filter related msg events to 'coin_spent' events
+                        arrayFilter(
                             (tx_result_related_msg_event) -> (
-                                -- get first non-neutron/pool/ denom coin event
+                                JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_spent' AND
                                 arrayExists(
-                                    (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
-                                    -- separate out each denom in the coin event
-                                    splitByChar(
-                                        ',',
-                                        JSONExtractString(
-                                            arrayFirst(
-                                                (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                                JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
-                                            ),
-                                            'value'
-                                        )
-                                    )
+                                    (tx_result_related_msg_event_attributes) -> (
+                                        JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'spender' AND
+                                        JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
+                                    ),
+                                    JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
                                 )
                             ),
-                            -- filter related msg events to 'coin_spent' events
-                            arrayFilter(
-                                (tx_result_related_msg_event) -> (
-                                    JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_spent' AND
-                                    arrayExists(
-                                        (tx_result_related_msg_event_attributes) -> (
-                                            JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'spender' AND
-                                            JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
+                            dex_msg_part_events
+                        )
+                    )],
+                    -- - tx_result_related_msg "field" tx_result_related_msg_dex_received_event
+                    [arrayFirst(
+                        (tx_result_related_msg_event) -> (
+                            -- get first non-neutron/pool/ denom coin event
+                            arrayExists(
+                                (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
+                                -- separate out each denom in the coin event
+                                splitByChar(
+                                    ',',
+                                    JSONExtractString(
+                                        arrayFirst(
+                                            (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
+                                            JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
                                         ),
-                                        JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
-                                    )
-                                ),
-                                `msg_part_events`
-                            )
-                        )],
-                        -- - tx_result_related_msg "field" tx_result_related_msg_dex_received_event
-                        [arrayFirst(
-                            (tx_result_related_msg_event) -> (
-                                -- get first non-neutron/pool/ denom coin event
-                                arrayExists(
-                                    (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
-                                    -- separate out each denom in the coin event
-                                    splitByChar(
-                                        ',',
-                                        JSONExtractString(
-                                            arrayFirst(
-                                                (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                                JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
-                                            ),
-                                            'value'
-                                        )
+                                        'value'
                                     )
                                 )
-                            ),
-                            -- filter related msg events to 'coin_received' events
-                            arrayFilter(
-                                (tx_result_related_msg_event) -> (
-                                    JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_received' AND
-                                    arrayExists(
-                                        (tx_result_related_msg_event_attributes) -> (
-                                            JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'receiver' AND
-                                            JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
-                                        ),
-                                        JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
-                                    )
-                                ),
-                                `msg_part_events`
                             )
-                        )]
-                    ),
-                    -- filter to only TickUpdate events
-                    arrayFilter(
-                        msg_part_event -> JSONExtractString(msg_part_event, 'type') = 'TickUpdate',
-                        [msg_part_event]
-                    )
+                        ),
+                        -- filter related msg events to 'coin_received' events
+                        arrayFilter(
+                            (tx_result_related_msg_event) -> (
+                                JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_received' AND
+                                arrayExists(
+                                    (tx_result_related_msg_event_attributes) -> (
+                                        JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'receiver' AND
+                                        JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
+                                    ),
+                                    JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                )
+                            ),
+                            dex_msg_part_events
+                        )
+                    )]
                 ),
-                -- enumerate each (msg_part_event, msg_part_event_index) within a txs_result_msg_part
-                `msg_part_events`,
-                arrayEnumerate(`msg_part_events`)
+                -- filter to only messages that contain a tick update
+                -- this allows us to calculate the dex_spent_event and dex_received_event for all tick parts only once
+                arrayFilter(
+                    (msg_part_events) -> arrayExists(
+                        (msg_part_event) -> JSONExtractString(msg_part_event, 'type') = 'TickUpdate',
+                        msg_part_events
+                    ),
+                    [`msg_part_events`]
+                )
             )
         )
     ) AS `event_tuple`

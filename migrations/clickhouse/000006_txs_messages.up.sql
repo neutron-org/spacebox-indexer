@@ -2,13 +2,13 @@
 CREATE TABLE spacebox.txs_messages
 (
     `timestamp` DateTime,
-    `height` UInt64,
-    `tx_index` UInt32,
+    `height` Int64,
+    `tx_index` Int32,
     -- msg data
-    `msg_part_index` UInt16,
-    `msg_indexes` Array(UInt16),
+    `msg_part_index` Int16,
+    `msg_indexes` Array(Int16),
     -- event data
-    `msg_events_index_offset` UInt32,
+    `msg_events_index_offset` Int32,
     `msg_events` Array(String)
 )
 ENGINE = ReplacingMergeTree
@@ -24,13 +24,13 @@ SETTINGS index_granularity = 8192;
 CREATE MATERIALIZED VIEW spacebox.txs_messages_writer TO spacebox.txs_messages
 (
     `timestamp` DateTime,
-    `height` UInt64,
-    `tx_index` UInt32,
+    `height` Int64,
+    `tx_index` Int32,
     -- msg data
-    `msg_part_index` UInt16,
-    `msg_indexes` Array(UInt16),
+    `msg_part_index` Int16,
+    `msg_indexes` Array(Int16),
     -- event data
-    `msg_events_index_offset` UInt32,
+    `msg_events_index_offset` Int32,
     `msg_events` Array(String)
 ) AS
 WITH
@@ -76,9 +76,9 @@ FROM
                                         acc,
                                         [(
                                             tx_result_index,
-                                            toUInt16(acc[-1].2 + 1),
+                                            toInt16(acc[-1].2 + 1),
                                             tx_result_event__msg_indexes,
-                                            toUInt32(acc[-1].4 + if(empty(acc[-1].3), 0, length(acc[-1].5))),
+                                            toInt32(acc[-1].4 + if(empty(acc[-1].3), 0, length(acc[-1].5))),
                                             [tx_result_event]
                                         )]
                                     )
@@ -94,11 +94,11 @@ FROM
                                 -- tx_result_tuple.1: tx_index
                                 tx_result_index,
                                 -- tx_result_tuple.2: msg_part_index
-                                toUInt16(0),
+                                toInt16(0),
                                 -- tx_result_tuple.3: msg_indexes
                                 tx_result_events__msg_indexes[1],
                                 -- tx_result_tuple.4: msg_events_index_offset
-                                toUInt32(0),
+                                toInt32(0),
                                 -- tx_result_tuple.5: msg_events
                                 [tx_result_events[1]]
                             )]

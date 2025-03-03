@@ -2,15 +2,15 @@
 CREATE TABLE spacebox.dex_txs_messages
 (
     `timestamp` DateTime,
-    `height` UInt64,
-    `tx_index` UInt32,
+    `height` Int64,
+    `tx_index` Int32,
     -- msg data
-    `msg_part_index` UInt16,
-    `msg_indexes` Array(UInt16),
+    `msg_part_index` Int16,
+    `msg_indexes` Array(Int16),
     -- wasm msg data
-    `wasm_part_index` UInt16,
+    `wasm_part_index` Int16,
     -- event data
-    `msg_part_events_index_offset` UInt32,
+    `msg_part_events_index_offset` Int32,
     `msg_part_events` Array(String)
 )
 ENGINE = ReplacingMergeTree
@@ -26,15 +26,15 @@ SETTINGS index_granularity = 8192;
 CREATE MATERIALIZED VIEW spacebox.dex_txs_messages_writer TO spacebox.dex_txs_messages
 (
     `timestamp` DateTime,
-    `height` UInt64,
-    `tx_index` UInt32,
+    `height` Int64,
+    `tx_index` Int32,
     -- msg data
-    `msg_part_index` UInt16,
-    `msg_indexes` Array(UInt16),
+    `msg_part_index` Int16,
+    `msg_indexes` Array(Int16),
     -- wasm msg data
-    `wasm_part_index` UInt16,
+    `wasm_part_index` Int16,
     -- event data
-    `msg_part_events_index_offset` UInt32,
+    `msg_part_events_index_offset` Int32,
     `msg_part_events` Array(String)
 ) AS
 WITH
@@ -61,9 +61,9 @@ FROM
                     (msg_events__wasm_dex_msg_event_indexes) -> arrayMap(
                         (wasm_dex_msg_event_index_lower_bound, wasm_dex_msg_event_index_upper_bound, wasm_part_index) -> (
                             -- tx_message_tuple.1: wasm_part_index
-                            toUInt16(wasm_part_index - 1),
+                            toInt16(wasm_part_index - 1),
                             -- tx_message_tuple.2: msg_part_events_index_offset
-                            toUInt32(`msg_events_index_offset` + wasm_dex_msg_event_index_lower_bound - 1),
+                            toInt32(`msg_events_index_offset` + wasm_dex_msg_event_index_lower_bound - 1),
                             -- tx_message_tuple.2: msg_part_events
                             arraySlice(
                                 `msg_events`,
@@ -164,10 +164,10 @@ SETTINGS
 CREATE TABLE spacebox.dex_event_tick_update
 (
     `timestamp` DateTime,
-    `height` UInt64,
-    `block_part_index` UInt8,
-    `tx_index` UInt32,
-    `event_index` UInt32,
+    `height` Int64,
+    `block_part_index` Int8,
+    `tx_index` Int32,
+    `event_index` Int32,
     -- event data
     `type` String,
     `action` String,
@@ -206,10 +206,10 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.dex_block_event_tick_update_writer TO spacebox.dex_event_tick_update (
     `timestamp` DateTime,
-    `height` UInt64,
-    `block_part_index` UInt8,
-    `tx_index` UInt32,
-    `event_index` UInt32,
+    `height` Int64,
+    `block_part_index` Int8,
+    `tx_index` Int32,
+    `event_index` Int32,
     -- event data
     `type` String,
     `action` String,
@@ -315,10 +315,10 @@ SETTINGS
 
 CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.dex_event_tick_update (
     `timestamp` DateTime,
-    `height` UInt64,
-    `block_part_index` UInt8,
-    `tx_index` UInt32,
-    `event_index` UInt32,
+    `height` Int64,
+    `block_part_index` Int8,
+    `tx_index` Int32,
+    `event_index` Int32,
     -- event data
     `type` String,
     `action` String,
@@ -383,7 +383,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.d
                             (msg_part_event, msg_part_event_index) -> arrayMap(
                                 (tick_update_event) -> (
                                     -- event_tuple.1: event_index
-                                    toUInt32(`msg_part_events_index_offset` + msg_part_event_index - 1),
+                                    toInt32(`msg_part_events_index_offset` + msg_part_event_index - 1),
                                     -- event_tuple.2: event_type
                                     JSONExtractString(tick_update_event, 'type'),
                                     -- event_tuple.3: event_attributes

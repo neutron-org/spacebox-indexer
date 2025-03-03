@@ -45,8 +45,8 @@ GROUP BY height, hash, num_txs, total_gas, proposer_address, timestamp, signatur
 
 CREATE TABLE spacebox.raw_block_txhash
 (
-    `height`           UInt64,
-    `tx_index`         UInt32,
+    `height`           Int64,
+    `tx_index`         Int32,
     `tx_hash`          String,
     `timestamp`        DATETIME
 )

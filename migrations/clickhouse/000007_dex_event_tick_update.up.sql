@@ -343,7 +343,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.d
         event_tuple.2 as `event_type`,
         event_tuple.3 as `event_attributes`,
         -- computed field
-        event_tuple.4 as `is_swap`
+        event_tuple.4 as `calculated_is_swap`
     SELECT
         `timestamp`,
         `height`,
@@ -371,7 +371,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.d
         toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
         toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
         -- add computed `is_swap` field for DEX v1-5 swap-volume fix
-        `is_swap`
+        if (SwapAmountIn > 0, 1, `calculated_is_swap`) as `is_swap`
     FROM spacebox.dex_txs_messages
     ARRAY JOIN (
         -- Extract "txs_results" events with tx_index

@@ -174,12 +174,12 @@ CREATE TABLE spacebox.dex_event_tick_update
     `TokenZero` String,
     `TokenOne` String,
     `TokenIn` String,
-    `TickIndex` Int32,
-    `Fee` UInt8,
+    `TickIndex` Int64,
+    `Fee` UInt64,
     -- note: cannot make TrancheKey nullable if it is going to be in an index
     --       LP type ticks will have empty string TrancheKey values
     `TrancheKey` String,
-    `Reserves` UInt128,
+    `Reserves` UInt256,
     -- added after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
     `SwapAmountIn` UInt256,
     `SwapAmountOut` UInt256,
@@ -216,10 +216,10 @@ CREATE MATERIALIZED VIEW spacebox.dex_block_event_tick_update_writer TO spacebox
     `TokenZero` String,
     `TokenOne` String,
     `TokenIn` String,
-    `TickIndex` Int32,
-    `Fee` UInt8,
+    `TickIndex` Int64,
+    `Fee` UInt64,
     `TrancheKey` String,
-    `Reserves` UInt128,
+    `Reserves` UInt256,
     -- added after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
     `SwapAmountIn` UInt256,
     `SwapAmountOut` UInt256,
@@ -253,13 +253,13 @@ CREATE MATERIALIZED VIEW spacebox.dex_block_event_tick_update_writer TO spacebox
         if(
             notEmpty(`TrancheKey`),
             0,
-            toUInt16OrZero(JSONExtractString(arrayLast(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value'))
+            toUInt64OrZero(JSONExtractString(arrayLast(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value'))
         ) AS `Fee`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TrancheKey'), `event_attributes`), 'value') AS `TrancheKey`,
-        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Reserves'), `event_attributes`), 'value')) AS `Reserves`,
+        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Reserves'), `event_attributes`), 'value')) AS `Reserves`,
         -- add new fields after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
-        toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
-        toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
+        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
+        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
         -- add computed `is_swap` field for DEX v1-5 swap-volume fix
         `is_swap`
     FROM spacebox.raw_block_results
@@ -325,10 +325,10 @@ CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.d
     `TokenZero` String,
     `TokenOne` String,
     `TokenIn` String,
-    `TickIndex` Int32,
-    `Fee` UInt8,
+    `TickIndex` Int64,
+    `Fee` UInt64,
     `TrancheKey` String,
-    `Reserves` UInt128,
+    `Reserves` UInt256,
     -- added after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
     `SwapAmountIn` UInt256,
     `SwapAmountOut` UInt256,
@@ -363,13 +363,13 @@ CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.d
         if(
             notEmpty(`TrancheKey`),
             0,
-            toUInt16OrZero(JSONExtractString(arrayLast(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value'))
+            toUInt64OrZero(JSONExtractString(arrayLast(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value'))
         ) AS `Fee`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TrancheKey'), `event_attributes`), 'value') AS `TrancheKey`,
-        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Reserves'), `event_attributes`), 'value')) AS `Reserves`,
+        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Reserves'), `event_attributes`), 'value')) AS `Reserves`,
         -- add new fields after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
-        toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
-        toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
+        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
+        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
         -- add computed `is_swap` field for DEX v1-5 swap-volume fix
         if (SwapAmountIn > 0, 1, `calculated_is_swap`) as `is_swap`
     FROM spacebox.dex_txs_messages

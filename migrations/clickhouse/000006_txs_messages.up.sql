@@ -1,8 +1,9 @@
 
-CREATE TABLE spacebox.txs_messages
+CREATE TABLE spacebox.block_message_events
 (
     `timestamp` DateTime,
     `height` Int64,
+    `block_part_index` Int8,
     `tx_index` Int32,
     -- msg data
     `msg_part_index` Int16,
@@ -14,17 +15,19 @@ CREATE TABLE spacebox.txs_messages
 ENGINE = ReplacingMergeTree
 ORDER BY (
     height,
+    block_part_index,
     tx_index,
     msg_part_index
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.txs_messages_writer source
+-- spacebox.block_message_events_txs_writer source
 
-CREATE MATERIALIZED VIEW spacebox.txs_messages_writer TO spacebox.txs_messages
+CREATE MATERIALIZED VIEW spacebox.block_message_events_txs_writer TO spacebox.block_message_events
 (
     `timestamp` DateTime,
     `height` Int64,
+    `block_part_index` Int8,
     `tx_index` Int32,
     -- msg data
     `msg_part_index` Int16,
@@ -43,6 +46,8 @@ WITH
 SELECT
     `timestamp`,
     `height`,
+    -- BeginBlock is 1, txs is 2, EndBlock/Other is 3
+    2 as `block_part_index`,
     `tx_index`,
     `msg_part_index`,
     `msg_indexes`,
@@ -134,6 +139,108 @@ FROM
             )
         )
     ) AS `tx_result_tuple`
+SETTINGS
+    -- split query execution into small chunks to reduce peak memory usage
+    max_block_size = 50;
+
+-- spacebox.block_message_events_block_writer source
+
+CREATE MATERIALIZED VIEW spacebox.block_message_events_block_writer TO spacebox.block_message_events
+(
+    `timestamp` DateTime,
+    `height` Int64,
+    `block_part_index` Int8,
+    `tx_index` Int32,
+    -- msg data
+    `msg_part_index` Int16,
+    `msg_indexes` Array(Int16),
+    -- event data
+    `msg_events_index_offset` Int32,
+    `msg_events` Array(String)
+) AS
+WITH
+    -- define join tuple parts for row fields
+    block_event_tuple.1 as `is_begin_block`,
+    block_event_tuple.2 as `msg_events_index_offset`,
+    block_event_tuple.3 as `msg_events`
+SELECT
+    `timestamp`,
+    `height`,
+    -- BeginBlock is 1, txs is 2, EndBlock/Other is 3
+    if(`is_begin_block`, 1, 3) as `block_part_index`,
+    0 as `tx_index`, -- not a tx
+    -- msg data
+    0 as `msg_part_index`, -- not a tx
+    [] as `msg_indexes`, -- not a tx
+    `msg_events_index_offset`,
+    `msg_events`
+FROM
+    spacebox.raw_block_results
+    ARRAY JOIN (
+        -- Extract "finalize_block_events" events with event_index
+        arrayFlatten(
+            arrayMap(
+                (block_events) -> arrayMap(
+                    (block_events__is_begin_block) -> arrayFold(
+                        (acc, block_event, block_event__is_begin_block) -> (
+                            if (
+                                acc[-1].1 = block_event__is_begin_block,
+                                -- Append event to the last group of events
+                                arrayConcat(
+                                    arrayPopBack(acc),
+                                    [(
+                                        acc[-1].1,
+                                        acc[-1].2,
+                                        arrayConcat(acc[-1].3, [block_event])
+                                    )]
+                                ),
+                                -- Otherwise, create a new group
+                                arrayConcat(
+                                    acc,
+                                    [(
+                                        block_event__is_begin_block,
+                                        toInt32(acc[-1].2 + length(acc[-1].3)),
+                                        [block_event]
+                                    )]
+                                )
+                            )
+                        ),
+                        -- fold (reduce) over subsequent message events
+                        -- - block_event "field" block_event
+                        arrayPopFront(block_events),
+                        -- - block_event "field" block_event__is_begin_block
+                        arrayPopFront(block_events__is_begin_block),
+                        -- create arrayFold initial value from first event
+                        [(
+                            -- block_event_tuple.1: is_begin_block
+                            block_events__is_begin_block[1],
+                            -- block_event_tuple.2: msg_events_index_offset
+                            toInt32(0),
+                            -- block_event_tuple.3: msg_events
+                            [block_events[1]]
+                        )]
+                    ),
+                    -- precompute block_events "fields" as arrayMap lambda arguments
+                    -- - block_events "field" block_events__is_begin_block
+                    [arrayMap(
+                        (block_event) -> (
+                            JSONExtractString(
+                                arrayLast(
+                                    attr -> JSONExtractString(attr, 'key') = 'mode',
+                                    JSONExtractArrayRaw(block_event, 'attributes')
+                                ),
+                                'value'
+                            ) = 'BeginBlock'
+                        ),
+                        block_events
+                    )]
+                ),
+                -- precompute block_events "fields" as arrayMap lambda arguments
+                -- - block_events "field" block_events
+                [JSONExtractArrayRaw(`finalize_block_events`)]
+            )
+        )
+    ) AS `block_event_tuple`
 SETTINGS
     -- split query execution into small chunks to reduce peak memory usage
     max_block_size = 50;

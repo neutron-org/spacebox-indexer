@@ -1,8 +1,9 @@
 
-CREATE TABLE spacebox.dex_txs_messages
+CREATE TABLE spacebox.dex_message_events
 (
     `timestamp` DateTime,
     `height` Int64,
+    `block_part_index` Int8,
     `tx_index` Int32,
     -- msg data
     `msg_part_index` Int16,
@@ -16,17 +17,20 @@ CREATE TABLE spacebox.dex_txs_messages
 ENGINE = ReplacingMergeTree
 ORDER BY (
     height,
+    block_part_index,
     tx_index,
-    msg_part_index
+    msg_part_index,
+    wasm_part_index
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_txs_messages_writer source
+-- spacebox.dex_message_events_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_txs_messages_writer TO spacebox.dex_txs_messages
+CREATE MATERIALIZED VIEW spacebox.dex_message_events_writer TO spacebox.dex_message_events
 (
     `timestamp` DateTime,
     `height` Int64,
+    `block_part_index` Int8,
     `tx_index` Int32,
     -- msg data
     `msg_part_index` Int16,
@@ -45,6 +49,7 @@ WITH
 SELECT
     `timestamp`,
     `height`,
+    `block_part_index`,
     `tx_index`,
     `msg_part_index`,
     `msg_indexes`,
@@ -52,7 +57,7 @@ SELECT
     `msg_part_events_index_offset`,
     `msg_part_events`
 FROM
-    spacebox.txs_messages
+    spacebox.block_message_events
     ARRAY JOIN (
         -- Extract "DEX wasm event fingerprint" from events to extract wasm msg events
         arrayFlatten(
@@ -202,118 +207,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_event_tick_update source 1
+-- spacebox.dex_event_tick_update_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_block_event_tick_update_writer TO spacebox.dex_event_tick_update (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
-    -- event data
-    `type` String,
-    `action` String,
-    `TokenZero` String,
-    `TokenOne` String,
-    `TokenIn` String,
-    `TickIndex` Int64,
-    `Fee` UInt64,
-    `TrancheKey` String,
-    `Reserves` UInt256,
-    -- added after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
-    `SwapAmountIn` UInt256,
-    `SwapAmountOut` UInt256,
-    -- added to calculate SwapAmountIn/Out for DEX v<=5 events
-    `is_swap` Boolean
-) AS
-    WITH
-        -- define event_tuple parts for row fields
-        event_tuple.1 as `block_part_index`,
-        event_tuple.2 as `tx_index`,
-        event_tuple.3 as `event_index`,
-        event_tuple.4 as `event_type`,
-        event_tuple.5 as `event_attributes`,
-        -- computed field
-        event_tuple.6 as `is_swap`
-    SELECT
-        `timestamp`,
-        `height`,
-        `block_part_index`,
-        `tx_index`,
-        `event_index`,
-        `event_type` as `type`,
-        -- add event attributes
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenOne'), `event_attributes`), 'value') AS `TokenOne`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenIn'), `event_attributes`), 'value') AS `TokenIn`,
-        toInt32(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TickIndex'), `event_attributes`), 'value')) AS `TickIndex`,
-        -- fix accidental incorrect Fee values added to tranche-ticks before v4 (see https://github.com/neutron-org/neutron/pull/473)
-        -- tranches are always effectively a 0% LP fee
-        if(
-            notEmpty(`TrancheKey`),
-            0,
-            toUInt64OrZero(JSONExtractString(arrayLast(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value'))
-        ) AS `Fee`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TrancheKey'), `event_attributes`), 'value') AS `TrancheKey`,
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Reserves'), `event_attributes`), 'value')) AS `Reserves`,
-        -- add new fields after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
-        -- add computed `is_swap` field for DEX v1-5 swap-volume fix
-        `is_swap`
-    FROM spacebox.raw_block_results
-    ARRAY JOIN (
-        -- Extract "finalize_block_events" events
-        arrayFlatten(
-            arrayMap(
-                (evnt, event_index) -> (
-                    -- for each TickUpdate event, process each part
-                    arrayMap(
-                        tick_update_event -> (
-                            -- event_tuple.1: block_part_index
-                            if(
-                                JSONExtractString(
-                                    arrayLast(
-                                        attr -> JSONExtractString(attr, 'key') = 'mode',
-                                        JSONExtractArrayRaw(tick_update_event, 'attributes')
-                                    ),
-                                    'value'
-                                ) = 'BeginBlock',
-                                1, -- set BeginBlock as block part 1
-                                3  -- set EndBlock/unknown as block part 3
-                            ),
-                            -- event_tuple.2: tx_index (note: cannot be null because it is part of the table index)
-                            0,
-                            -- event_tuple.3: event_index
-                            event_index,
-                            -- event_tuple.4: event_type
-                            JSONExtractString(tick_update_event, 'type'),
-                            -- event_tuple.5: event_attributes
-                            JSONExtractArrayRaw(tick_update_event, 'attributes'),
-                            -- event_tuple.6: is_swap
-                            false
-                        ),
-                        -- first filter to only TickUpdate events
-                        arrayFilter(
-                            (evnt) -> JSONExtractString(evnt, 'type') = 'TickUpdate',
-                            [evnt]
-                        )
-                    )
-                ),
-                JSONExtractArrayRaw(`finalize_block_events`),
-                arrayEnumerate(JSONExtractArrayRaw(`finalize_block_events`))
-            )
-        )
-    ) AS `event_tuple`
-SETTINGS
-    -- the array joins in the `is_swap` fix are heavy on memory usage
-    -- better for this to be slow than crash the application
-    max_block_size = 100;
-
--- spacebox.dex_event_tick_update source 2
-
-CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.dex_event_tick_update (
+CREATE MATERIALIZED VIEW spacebox.dex_event_tick_update_writer TO spacebox.dex_event_tick_update (
     `timestamp` DateTime,
     `height` Int64,
     `block_part_index` Int8,
@@ -347,8 +243,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.d
     SELECT
         `timestamp`,
         `height`,
-        -- block part 1 is BeginBlock, 2 is txs, 3 is EndBlock/unknown
-        2 as `block_part_index`,
+        `block_part_index`,
         `tx_index`,
         `event_index`,
         `event_type` as `type`,
@@ -372,7 +267,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_txs_event_tick_update_writer TO spacebox.d
         toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
         -- add computed `is_swap` field for DEX v1-5 swap-volume fix
         if (SwapAmountIn > 0, 1, `calculated_is_swap`) as `is_swap`
-    FROM spacebox.dex_txs_messages
+    FROM spacebox.dex_message_events
     ARRAY JOIN (
         -- Extract "txs_results" events with tx_index
         arrayFlatten(

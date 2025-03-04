@@ -1,5 +1,5 @@
 
-CREATE TABLE spacebox.dex_message_events
+CREATE TABLE spacebox.dex_message_event
 (
     `timestamp` DateTime,
     `height` Int64,
@@ -24,9 +24,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_message_events_writer source
+-- spacebox.dex_message_event_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_message_events_writer TO spacebox.dex_message_events
+CREATE MATERIALIZED VIEW spacebox.dex_message_event_writer TO spacebox.dex_message_event
 (
     `timestamp` DateTime,
     `height` Int64,
@@ -57,7 +57,7 @@ SELECT
     `msg_part_events_index_offset`,
     `msg_part_events`
 FROM
-    spacebox.block_message_events
+    spacebox.message_event
     ARRAY JOIN (
         -- Extract "DEX wasm event fingerprint" from events to extract wasm msg events
         arrayFlatten(
@@ -164,9 +164,9 @@ SETTINGS
     -- split query execution into small chunks to reduce peak memory usage
     max_block_size = 50;
 
--- spacebox.dex_event_tick_update table
+-- spacebox.dex_message_event_tick_update table
 
-CREATE TABLE spacebox.dex_event_tick_update
+CREATE TABLE spacebox.dex_message_event_tick_update
 (
     `timestamp` DateTime,
     `height` Int64,
@@ -207,9 +207,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_event_tick_update_writer source
+-- spacebox.dex_message_event_tick_update_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_event_tick_update_writer TO spacebox.dex_event_tick_update (
+CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spacebox.dex_message_event_tick_update (
     `timestamp` DateTime,
     `height` Int64,
     `block_part_index` Int8,
@@ -267,7 +267,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_event_tick_update_writer TO spacebox.dex_e
         toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
         -- add computed `is_swap` field for DEX v1-5 swap-volume fix
         if (SwapAmountIn > 0, 1, `calculated_is_swap`) as `is_swap`
-    FROM spacebox.dex_message_events
+    FROM spacebox.dex_message_event
     ARRAY JOIN (
         -- Extract "txs_results" events with tx_index
         arrayFlatten(

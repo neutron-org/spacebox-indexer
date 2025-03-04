@@ -1,5 +1,5 @@
 
-CREATE TABLE spacebox.block_message_events
+CREATE TABLE spacebox.message_event
 (
     `timestamp` DateTime,
     `height` Int64,
@@ -21,9 +21,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.block_message_events_txs_writer source
+-- spacebox.message_event_txs_writer source
 
-CREATE MATERIALIZED VIEW spacebox.block_message_events_txs_writer TO spacebox.block_message_events
+CREATE MATERIALIZED VIEW spacebox.message_event_txs_writer TO spacebox.message_event
 (
     `timestamp` DateTime,
     `height` Int64,
@@ -143,9 +143,9 @@ SETTINGS
     -- split query execution into small chunks to reduce peak memory usage
     max_block_size = 50;
 
--- spacebox.block_message_events_block_writer source
+-- spacebox.message_event_block_writer source
 
-CREATE MATERIALIZED VIEW spacebox.block_message_events_block_writer TO spacebox.block_message_events
+CREATE MATERIALIZED VIEW spacebox.message_event_block_writer TO spacebox.message_event
 (
     `timestamp` DateTime,
     `height` Int64,

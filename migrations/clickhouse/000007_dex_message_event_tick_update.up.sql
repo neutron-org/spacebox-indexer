@@ -269,12 +269,12 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
         if (SwapAmountIn > 0, 1, `calculated_is_swap`) as `is_swap`
     FROM spacebox.dex_message_event
     ARRAY JOIN (
-        -- Extract "txs_results" events with tx_index
+        -- Extract "message part" events with tx_index
         arrayFlatten(
             arrayMap(
                 (dex_msg_part_events) -> arrayMap(
-                    (tx_result_related_msg_dex_spent_event, tx_result_related_msg_dex_received_event) -> arrayMap(
-                        (tx_result_related_msg_dex_received_denom) -> arrayMap(
+                    (related_msg_dex_spent_event, related_msg_dex_received_event) -> arrayMap(
+                        (related_msg_dex_received_denom) -> arrayMap(
                             (msg_part_event, msg_part_event_index) -> arrayMap(
                                 (tick_update_event) -> (
                                     -- event_tuple.1: event_index
@@ -284,9 +284,9 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                     -- event_tuple.3: event_attributes
                                     JSONExtractArrayRaw(tick_update_event, 'attributes'),
                                     -- event_tuple.4: is_swap
-                                    notEmpty(tx_result_related_msg_dex_received_denom) AND
+                                    notEmpty(related_msg_dex_received_denom) AND
                                     -- is_swap part: exclude if event denom is the related msg dex received denom
-                                    tx_result_related_msg_dex_received_denom != JSONExtractString(
+                                    related_msg_dex_received_denom != JSONExtractString(
                                         arrayFirst(
                                             x -> JSONExtractString(x, 'key') = 'TokenIn',
                                             JSONExtractArrayRaw(tick_update_event, 'attributes')
@@ -300,15 +300,15 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                     [msg_part_event]
                                 )
                             ),
-                            -- enumerate each (msg_part_event, msg_part_event_index) within a txs_result_msg_part
+                            -- enumerate each (msg_part_event, msg_part_event_index) within a message part
                             dex_msg_part_events,
                             arrayEnumerate(dex_msg_part_events)
                         ),
-                        -- precompute tx_result_related_msg "fields" as arrayMap lambda arguments
-                        -- - tx_result_related_msg "field" tx_result_related_msg_dex_received_denom
+                        -- precompute related_msg "fields" as arrayMap lambda arguments
+                        -- - related_msg "field" related_msg_dex_received_denom
                         [if(
-                            notEmpty(tx_result_related_msg_dex_spent_event) AND
-                            notEmpty(tx_result_related_msg_dex_received_event),
+                            notEmpty(related_msg_dex_spent_event) AND
+                            notEmpty(related_msg_dex_received_event),
                             -- calculate related msg dex received denom
                             regexpExtract(
                                 arrayFirst(
@@ -319,7 +319,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                         JSONExtractString(
                                             arrayFirst(
                                                 (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                                JSONExtractArrayRaw(tx_result_related_msg_dex_received_event, 'attributes')
+                                                JSONExtractArrayRaw(related_msg_dex_received_event, 'attributes')
                                             ),
                                             'value'
                                         )
@@ -331,10 +331,10 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                             ''
                         )]
                     ),
-                    -- precompute tx_result_related_msg "fields" as arrayMap lambda arguments
-                    -- - tx_result_related_msg "field" tx_result_related_msg_dex_spent_event
+                    -- precompute related_msg "fields" as arrayMap lambda arguments
+                    -- - related_msg "field" related_msg_dex_spent_event
                     [arrayFirst(
-                        (tx_result_related_msg_event) -> (
+                        (related_msg_event) -> (
                             -- get first non-neutron/pool/ denom coin event
                             arrayExists(
                                 (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
@@ -344,7 +344,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                     JSONExtractString(
                                         arrayFirst(
                                             (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                            JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                            JSONExtractArrayRaw(related_msg_event, 'attributes')
                                         ),
                                         'value'
                                     )
@@ -353,22 +353,22 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                         ),
                         -- filter related msg events to 'coin_spent' events
                         arrayFilter(
-                            (tx_result_related_msg_event) -> (
-                                JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_spent' AND
+                            (related_msg_event) -> (
+                                JSONExtractString(related_msg_event, 'type') = 'coin_spent' AND
                                 arrayExists(
-                                    (tx_result_related_msg_event_attributes) -> (
-                                        JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'spender' AND
-                                        JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
+                                    (related_msg_event_attributes) -> (
+                                        JSONExtractString(related_msg_event_attributes, 'key') = 'spender' AND
+                                        JSONExtractString(related_msg_event_attributes, 'value') = dex_address
                                     ),
-                                    JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                    JSONExtractArrayRaw(related_msg_event, 'attributes')
                                 )
                             ),
                             dex_msg_part_events
                         )
                     )],
-                    -- - tx_result_related_msg "field" tx_result_related_msg_dex_received_event
+                    -- - related_msg "field" related_msg_dex_received_event
                     [arrayFirst(
-                        (tx_result_related_msg_event) -> (
+                        (related_msg_event) -> (
                             -- get first non-neutron/pool/ denom coin event
                             arrayExists(
                                 (coin) -> not(match(coin, '^\\d+neutron\/pool\/\\d+$')),
@@ -378,7 +378,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                     JSONExtractString(
                                         arrayFirst(
                                             (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                            JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                            JSONExtractArrayRaw(related_msg_event, 'attributes')
                                         ),
                                         'value'
                                     )
@@ -387,14 +387,14 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                         ),
                         -- filter related msg events to 'coin_received' events
                         arrayFilter(
-                            (tx_result_related_msg_event) -> (
-                                JSONExtractString(tx_result_related_msg_event, 'type') = 'coin_received' AND
+                            (related_msg_event) -> (
+                                JSONExtractString(related_msg_event, 'type') = 'coin_received' AND
                                 arrayExists(
-                                    (tx_result_related_msg_event_attributes) -> (
-                                        JSONExtractString(tx_result_related_msg_event_attributes, 'key') = 'receiver' AND
-                                        JSONExtractString(tx_result_related_msg_event_attributes, 'value') = dex_address
+                                    (related_msg_event_attributes) -> (
+                                        JSONExtractString(related_msg_event_attributes, 'key') = 'receiver' AND
+                                        JSONExtractString(related_msg_event_attributes, 'value') = dex_address
                                     ),
-                                    JSONExtractArrayRaw(tx_result_related_msg_event, 'attributes')
+                                    JSONExtractArrayRaw(related_msg_event, 'attributes')
                                 )
                             ),
                             dex_msg_part_events

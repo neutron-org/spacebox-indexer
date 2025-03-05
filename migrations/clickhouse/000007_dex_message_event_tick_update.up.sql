@@ -111,7 +111,6 @@ FROM
                         -- - msg_events "field" msg_events__wasm_dex_msg_regex_matches
                         [
                             if(
-                                has(msg_events__types, 'TickUpdate') AND
                                 has(msg_events__types, 'wasm'),
                                 arrayFilter(
                                     x -> notEmpty(x),
@@ -153,10 +152,18 @@ FROM
                 ),
                 -- precompute msg_events "fields" as arrayMap lambda arguments
                 -- - msg_events "field" msg_events__types
-                [arrayMap(
-                    (msg_event) -> JSONExtractString(msg_event, 'type'),
-                    msg_events
-                )]
+                arrayFilter(
+                    -- filter to only DEX messages by testing for "TickUpdate" or "TrancheUserUpdate" actions
+                    -- note: this may change in the future, but if no update has happened, its not really a DEX action
+                    (msg_events__types) -> (
+                        has(msg_events__types, 'TickUpdate') OR
+                        has(msg_events__types, 'TrancheUserUpdate')
+                    ),
+                    [arrayMap(
+                        (msg_event) -> JSONExtractString(msg_event, 'type'),
+                        msg_events
+                    )]
+                )
             )
         )
     ) AS `tx_message_tuple`

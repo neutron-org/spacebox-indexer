@@ -47,7 +47,7 @@ CREATE TABLE spacebox.raw_block_txhash
 (
     `height`           Int64,
     `tx_index`         Int32,
-    `tx_hash`          String,
+    `txhash`           String,
     `timestamp`        DATETIME
 )
     ENGINE = ReplacingMergeTree
@@ -57,7 +57,7 @@ CREATE TABLE spacebox.raw_block_txhash
 CREATE MATERIALIZED VIEW IF NOT EXISTS raw_block_txhash_consumer TO spacebox.raw_block_txhash AS
 SELECT JSONExtractInt(message, 'block', 'header', 'height')                                 AS height,
        tx_index,
-       tx_hash,
+       txhash,
        parseDateTimeBestEffortOrZero(JSONExtractString(message, 'block', 'header', 'time')) AS timestamp
 FROM spacebox.raw_block_topic
 --  get tx hashes in the correct block order
@@ -65,9 +65,9 @@ ARRAY JOIN
     arrayMap(
         txBase64 -> hex(SHA256(base64Decode(JSONExtractString(txBase64)))),
         JSONExtractArrayRaw(message, 'block', 'data', 'txs')
-    ) as tx_hash,
+    ) as txhash,
     arrayEnumerate(JSONExtractArrayRaw(message, 'block', 'data', 'txs')) as tx_index
-GROUP BY height, tx_index, tx_hash, timestamp;
+GROUP BY height, tx_index, txhash, timestamp;
 
 -- spacebox.raw_block_results_topic definition
 

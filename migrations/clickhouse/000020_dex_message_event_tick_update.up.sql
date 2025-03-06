@@ -252,3 +252,75 @@ SETTINGS
     -- the array joins in the `is_swap` fix are heavy on memory usage
     -- better for this to be slow than crash the application
     max_block_size = 100;
+
+-- spacebox.dex_message_event_tick_state latest version of reserve data table
+
+CREATE TABLE spacebox.dex_message_event_tick_state
+(
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TokenIn`           LowCardinality(String),
+    `TickIndex`         Int64,
+    `Fee`               UInt64,
+    `TrancheKey`        String,
+    `Reserves`          UInt256,
+    -- add field to hint to Clickhouse that field is "deleted" (will not actually be deleted)
+    `ReservesZero`      Boolean MATERIALIZED `Reserves` = 0,
+    -- create version number by combining all indexes together into a large (256 bit) space
+    `version`           UInt256 MATERIALIZED
+        -- add in order from lowest to highest ordering effect
+        (`event_index`        * toUInt256(1))
+        + (`tx_index`         * toUInt256(4294967296))              -- + shift by 32 event_index bits (2^32)
+        + (`block_part_index` * toUInt256(18446744073709551616))    -- + shift by 32 tx_index bits (2^64)
+        + (`height`           * toUInt256(4722366482869645213696))  -- + shift by 8 part_index bits (2^72)
+)
+-- use ReplacingMergeTree to ensure (eventually) no duplicates of the ORDER BY fields + `version`
+ENGINE = ReplacingMergeTree(`version`, `ReservesZero`)
+ORDER BY (
+    -- in general the data will be queried in pairs
+    -- "partition by" pairs
+    `TokenZero`,
+    `TokenOne`,
+    `TokenIn`,
+    -- "order by" pool
+    `TickIndex`,
+    `Fee`,
+    `TrancheKey`
+)
+SETTINGS index_granularity = 8192;
+
+-- spacebox.dex_message_event_tick_state_writer source
+
+CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_state_writer TO spacebox.dex_message_event_tick_state (
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TokenIn`           LowCardinality(String),
+    `TickIndex`         Int64,
+    `Fee`               UInt64,
+    `TrancheKey`        String,
+    `Reserves`          UInt256
+) AS
+SELECT
+    `timestamp`,
+    `height`,
+    `block_part_index`,
+    `tx_index`,
+    `event_index`,
+    `TokenZero`,
+    `TokenOne`,
+    `TokenIn`,
+    `TickIndex`,
+    `Fee`,
+    `TrancheKey`,
+    `Reserves`
+FROM spacebox.dex_message_event_tick_update;

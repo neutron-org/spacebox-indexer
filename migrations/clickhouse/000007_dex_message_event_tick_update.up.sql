@@ -62,57 +62,82 @@ FROM
         -- Extract "DEX wasm event fingerprint" from events to extract wasm msg events
         arrayFlatten(
             arrayMap(
-                (msg_events__types) -> arrayMap(
-                    (msg_events__wasm_dex_msg_event_indexes) -> arrayMap(
-                        (wasm_dex_msg_event_index_lower_bound, wasm_dex_msg_event_index_upper_bound, wasm_part_index) -> (
-                            -- tx_message_tuple.1: wasm_part_index
-                            toInt16(wasm_part_index - 1),
-                            -- tx_message_tuple.2: msg_part_events_index_offset
-                            toInt32(`msg_events_index_offset` + wasm_dex_msg_event_index_lower_bound - 1),
-                            -- tx_message_tuple.2: msg_part_events
-                            arraySlice(
-                                `msg_events`,
-                                wasm_dex_msg_event_index_lower_bound,
-                                wasm_dex_msg_event_index_upper_bound - wasm_dex_msg_event_index_lower_bound
-                            )
-                        ),
-                        -- pass start of bounds
-                        arrayConcat([1], msg_events__wasm_dex_msg_event_indexes),
-                        -- pass end of bounds
-                        arrayConcat(msg_events__wasm_dex_msg_event_indexes, [length(msg_events__types) + 1]),
-                        -- wasm_part_index 
-                        arrayEnumerate(arrayConcat([1], msg_events__wasm_dex_msg_event_indexes))
-                    ),
-                    arrayMap(
-                        -- precompute msg_events "fields" as arrayMap lambda arguments
-                        -- - msg_events "field" msg_events__wasm_dex_msg_event_indexes
-                        (msg_events__wasm_dex_msg_regex_matches) -> arraySort(
-                            arrayFlatten(
-                                -- find msg event bounds within wasm actions
-                                arrayMap(
-                                    (match, match_count_index) -> (
-                                        arrayFilter(
-                                            i -> arraySlice(msg_events__types, i, length(splitByChar(',', match))) = splitByChar(',', match),
-                                            arrayEnumerate(msg_events__types)
-                                        )[match_count_index]
-                                    ),
-                                    msg_events__wasm_dex_msg_regex_matches,
-                                    -- find the "match_count_index" number of the each match string by counting the number of previously seen matching match strings
-                                    -- (eg. if a PlaceLimitOrder match was detected, is it PlaceLimitOrder 1 or 2 or N?)
-                                    arrayMap(
-                                        (match, i) -> arrayCount(x -> x = match, arraySlice(msg_events__wasm_dex_msg_regex_matches, 1, i - 1)) + 1,
-                                        msg_events__wasm_dex_msg_regex_matches,
-                                        arrayEnumerate(msg_events__wasm_dex_msg_regex_matches)
-                                    )
+                (msg_events__types) -> (
+                    -- test if WASM msg part decomposition is required
+                    if (
+                        -- todo: replace check with height condition when fix release version height is known
+                        --       eg. `height < 25000000`
+                        -- current check: decompose all wasm msgs that don't have TickUpdate.SwapAmountIn attributes
+                        not(has(msg_events__types, 'wasm')) OR
+                        arrayExists(
+                            -- test for SwapAmountIn presence on TickUpdate events
+                            (msg_event) -> (
+                                JSONExtractString(msg_event, 'type') = 'TickUpdate' AND
+                                arrayExists(
+                                    (attr) -> JSONExtractString(attr, 'key') = 'SwapAmountIn',
+                                    JSONExtractArrayRaw(msg_event, 'attributes')
                                 )
-                            )
+                            ),
+                            msg_events
                         ),
-                        -- precompute msg_events "fields" as arrayMap lambda arguments
-                        -- - msg_events "field" msg_events__wasm_dex_msg_regex_matches
-                        [
-                            if(
-                                has(msg_events__types, 'wasm'),
-                                arrayFilter(
+                        -- pass the message as not requiring decomposition
+                        [[(
+                            -- tx_message_tuple.1: wasm_part_index
+                            toInt16(0),
+                            -- tx_message_tuple.2: msg_part_events_index_offset
+                            `msg_events_index_offset`,
+                            -- tx_message_tuple.2: msg_part_events
+                            `msg_events`
+                        )]],
+                        -- compute out all the DEX msg parts of each message
+                        arrayMap(
+                            (msg_events__wasm_dex_msg_event_indexes) -> arrayMap(
+                                (wasm_dex_msg_event_index_lower_bound, wasm_dex_msg_event_index_upper_bound, wasm_part_index) -> (
+                                    -- tx_message_tuple.1: wasm_part_index
+                                    toInt16(wasm_part_index - 1),
+                                    -- tx_message_tuple.2: msg_part_events_index_offset
+                                    toInt32(`msg_events_index_offset` + wasm_dex_msg_event_index_lower_bound - 1),
+                                    -- tx_message_tuple.2: msg_part_events
+                                    arraySlice(
+                                        `msg_events`,
+                                        wasm_dex_msg_event_index_lower_bound,
+                                        wasm_dex_msg_event_index_upper_bound - wasm_dex_msg_event_index_lower_bound
+                                    )
+                                ),
+                                -- pass start of bounds
+                                arrayConcat([1], msg_events__wasm_dex_msg_event_indexes),
+                                -- pass end of bounds
+                                arrayConcat(msg_events__wasm_dex_msg_event_indexes, [length(msg_events__types) + 1]),
+                                -- wasm_part_index
+                                arrayEnumerate(arrayConcat([1], msg_events__wasm_dex_msg_event_indexes))
+                            ),
+                            arrayMap(
+                                -- precompute msg_events "fields" as arrayMap lambda arguments
+                                -- - msg_events "field" msg_events__wasm_dex_msg_event_indexes
+                                (msg_events__wasm_dex_msg_regex_matches) -> arraySort(
+                                    arrayFlatten(
+                                        -- find msg event bounds within wasm actions
+                                        arrayMap(
+                                            (match, match_count_index) -> (
+                                                arrayFilter(
+                                                    i -> arraySlice(msg_events__types, i, length(splitByChar(',', match))) = splitByChar(',', match),
+                                                    arrayEnumerate(msg_events__types)
+                                                )[match_count_index]
+                                            ),
+                                            msg_events__wasm_dex_msg_regex_matches,
+                                            -- find the "match_count_index" number of the each match string by counting the number of previously seen matching match strings
+                                            -- (eg. if a PlaceLimitOrder match was detected, is it PlaceLimitOrder 1 or 2 or N?)
+                                            arrayMap(
+                                                (match, i) -> arrayCount(x -> x = match, arraySlice(msg_events__wasm_dex_msg_regex_matches, 1, i - 1)) + 1,
+                                                msg_events__wasm_dex_msg_regex_matches,
+                                                arrayEnumerate(msg_events__wasm_dex_msg_regex_matches)
+                                            )
+                                        )
+                                    )
+                                ),
+                                -- precompute msg_events "fields" as arrayMap lambda arguments
+                                -- - msg_events "field" msg_events__wasm_dex_msg_regex_matches
+                                [arrayFilter(
                                     x -> notEmpty(x),
                                     arrayFlatten(
                                         -- compare tx event types array as string against tx msg detection regex
@@ -144,10 +169,9 @@ FROM
                                             )
                                         )
                                     )
-                                ),
-                                []
+                                )]
                             )
-                        ]
+                        )
                     )
                 ),
                 -- precompute msg_events "fields" as arrayMap lambda arguments

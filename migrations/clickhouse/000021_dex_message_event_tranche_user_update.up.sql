@@ -72,6 +72,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tranche_user_update_writer T
         `event_type` as `type`,
         -- add event attributes
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
+        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Creator'), `event_attributes`), 'value') AS `Creator`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenOne'), `event_attributes`), 'value') AS `TokenOne`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenIn'), `event_attributes`), 'value') AS `TokenIn`,

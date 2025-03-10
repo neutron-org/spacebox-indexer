@@ -141,7 +141,11 @@ FROM
     ) AS `tx_result_tuple`
 SETTINGS
     -- split query execution into small chunks to reduce peak memory usage
-    max_block_size = 50;
+    max_block_size = 50,
+    -- do not wait for acknowledgement of insert (it should be fine):
+    -- it was found that some rows of data can take more than 60s to transform
+    async_insert = 1,
+    wait_for_async_insert = 0;
 
 -- spacebox.message_event_block_writer source
 
@@ -243,4 +247,8 @@ FROM
     ) AS `block_event_tuple`
 SETTINGS
     -- split query execution into small chunks to reduce peak memory usage
-    max_block_size = 50;
+    max_block_size = 50,
+    -- do not wait for acknowledgement of insert (it should be fine):
+    -- it was found that some rows of data can take more than 60s to transform
+    async_insert = 1,
+    wait_for_async_insert = 0;

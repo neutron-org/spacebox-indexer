@@ -115,22 +115,26 @@ FROM
                                 -- precompute msg_events "fields" as arrayMap lambda arguments
                                 -- - msg_events "field" msg_events__wasm_dex_msg_event_indexes
                                 (msg_events__wasm_dex_msg_regex_matches) -> arraySort(
-                                    arrayFlatten(
-                                        -- find msg event bounds within wasm actions
-                                        arrayMap(
-                                            (match, match_count_index) -> (
-                                                arrayFilter(
-                                                    i -> arraySlice(msg_events__types, i, length(splitByChar(',', match))) = splitByChar(',', match),
-                                                    arrayEnumerate(msg_events__types)
-                                                )[match_count_index]
-                                            ),
-                                            msg_events__wasm_dex_msg_regex_matches,
-                                            -- find the "match_count_index" number of the each match string by counting the number of previously seen matching match strings
-                                            -- (eg. if a PlaceLimitOrder match was detected, is it PlaceLimitOrder 1 or 2 or N?)
+                                    -- protect against found indexes of "0", those are not matches
+                                    arrayFilter(
+                                        (i) -> i > 0,
+                                        arrayFlatten(
+                                            -- find msg event bounds within wasm actions
                                             arrayMap(
-                                                (match, i) -> arrayCount(x -> x = match, arraySlice(msg_events__wasm_dex_msg_regex_matches, 1, i - 1)) + 1,
+                                                (match, match_count_index) -> (
+                                                    arrayFilter(
+                                                        i -> arraySlice(msg_events__types, i, length(splitByChar(',', match))) = splitByChar(',', match),
+                                                        arrayEnumerate(msg_events__types)
+                                                    )[match_count_index]
+                                                ),
                                                 msg_events__wasm_dex_msg_regex_matches,
-                                                arrayEnumerate(msg_events__wasm_dex_msg_regex_matches)
+                                                -- find the "match_count_index" number of the each match string by counting the number of previously seen matching match strings
+                                                -- (eg. if a PlaceLimitOrder match was detected, is it PlaceLimitOrder 1 or 2 or N?)
+                                                arrayMap(
+                                                    (match, i) -> arrayCount(x -> x = match, arraySlice(msg_events__wasm_dex_msg_regex_matches, 1, i - 1)) + 1,
+                                                    msg_events__wasm_dex_msg_regex_matches,
+                                                    arrayEnumerate(msg_events__wasm_dex_msg_regex_matches)
+                                                )
                                             )
                                         )
                                     )

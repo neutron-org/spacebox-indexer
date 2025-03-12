@@ -116,8 +116,9 @@ FROM
                                 -- - msg_events "field" msg_events__wasm_dex_msg_event_indexes
                                 (msg_events__wasm_dex_msg_regex_matches) -> arraySort(
                                     -- protect against found indexes of "0", those are not matches
+                                    -- also remove any "1" matches because we will add a "1" lower bound index later
                                     arrayFilter(
-                                        (i) -> i > 0,
+                                        (i) -> i > 1,
                                         arrayFlatten(
                                             -- find msg event bounds within wasm actions
                                             arrayMap(

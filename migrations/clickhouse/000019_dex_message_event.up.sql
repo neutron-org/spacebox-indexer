@@ -156,7 +156,7 @@ FROM
                                                     '(',
                                                     arrayStringConcat([
                                                         -- MsgDeposit
-                                                        '(?:message,)?(?:(?:neutron,)?(?:neutron,)?(?:TickUpdate,)?TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer(?:,message)?',
+                                                        '(?:message,)?(?:(?:neutron,)?(?:neutron,)?(?:TickUpdate,)?(?:neutron,)?TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer(?:,message)?',
                                                         -- MsgWithdrawal
                                                         '(?:message,)?(?:(?:neutron,)?TickUpdate,)+(?:message,)*coin_spent,coin_received,transfer,(?:message,)?coin_spent,burn,coin_spent,coin_received,transfer(?:,message)?,neutron',
                                                         -- MsgPlaceLimitOrder

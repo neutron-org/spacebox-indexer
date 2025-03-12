@@ -86,30 +86,33 @@ FROM
                             toInt16(0),
                             -- tx_message_tuple.2: msg_part_events_index_offset
                             `msg_events_index_offset`,
-                            -- tx_message_tuple.2: msg_part_events
+                            -- tx_message_tuple.3: msg_part_events
                             `msg_events`
                         )]],
                         -- compute out all the DEX msg parts of each message
                         arrayMap(
-                            (msg_events__wasm_dex_msg_event_indexes) -> arrayMap(
-                                (wasm_dex_msg_event_index_lower_bound, wasm_dex_msg_event_index_upper_bound, wasm_part_index) -> (
-                                    -- tx_message_tuple.1: wasm_part_index
-                                    toInt16(wasm_part_index - 1),
-                                    -- tx_message_tuple.2: msg_part_events_index_offset
-                                    toInt32(`msg_events_index_offset` + wasm_dex_msg_event_index_lower_bound - 1),
-                                    -- tx_message_tuple.2: msg_part_events
-                                    arraySlice(
-                                        `msg_events`,
-                                        wasm_dex_msg_event_index_lower_bound,
-                                        wasm_dex_msg_event_index_upper_bound - wasm_dex_msg_event_index_lower_bound
-                                    )
-                                ),
-                                -- pass start of bounds
-                                arrayConcat([1], msg_events__wasm_dex_msg_event_indexes),
-                                -- pass end of bounds
-                                arrayConcat(msg_events__wasm_dex_msg_event_indexes, [length(msg_events__types) + 1]),
-                                -- wasm_part_index
-                                arrayEnumerate(arrayConcat([1], msg_events__wasm_dex_msg_event_indexes))
+                            (msg_events__wasm_dex_msg_event_indexes) -> arrayFilter(
+                                (tuple) -> notEmpty(tuple.3),
+                                arrayMap(
+                                    (wasm_dex_msg_event_index_lower_bound, wasm_dex_msg_event_index_upper_bound, wasm_part_index) -> (
+                                        -- tx_message_tuple.1: wasm_part_index
+                                        toInt16(wasm_part_index - 1),
+                                        -- tx_message_tuple.2: msg_part_events_index_offset
+                                        toInt32(`msg_events_index_offset` + wasm_dex_msg_event_index_lower_bound - 1),
+                                        -- tx_message_tuple.3: msg_part_events
+                                        arraySlice(
+                                            `msg_events`,
+                                            wasm_dex_msg_event_index_lower_bound,
+                                            wasm_dex_msg_event_index_upper_bound - wasm_dex_msg_event_index_lower_bound
+                                        )
+                                    ),
+                                    -- pass start of bounds
+                                    arrayConcat([1], msg_events__wasm_dex_msg_event_indexes),
+                                    -- pass end of bounds
+                                    arrayConcat(msg_events__wasm_dex_msg_event_indexes, [length(msg_events__types) + 1]),
+                                    -- wasm_part_index
+                                    arrayEnumerate(arrayConcat([1], msg_events__wasm_dex_msg_event_indexes))
+                                )
                             ),
                             arrayMap(
                                 -- precompute msg_events "fields" as arrayMap lambda arguments
@@ -117,18 +120,24 @@ FROM
                                 (msg_events__wasm_dex_msg_regex_matches) -> arraySort(
                                     -- protect against found indexes of "0", those are not matches
                                     -- also remove any "1" matches because we will add a "1" lower bound index later
-                                    arrayFilter(
-                                        (i) -> i > 1,
-                                        arrayFlatten(
+                                    arrayFlatten(
+                                        arrayMap(
+                                            (match) -> [match.1, match.1 + match.2],
                                             -- find msg event bounds within wasm actions
                                             arrayMap(
-                                                (match, match_count_index) -> (
+                                                (match, match_length, match_count_index) -> (
                                                     arrayFilter(
-                                                        i -> arraySlice(msg_events__types, i, length(splitByChar(',', match))) = splitByChar(',', match),
+                                                        i -> arraySlice(msg_events__types, i, match_length) = splitByChar(',', match),
                                                         arrayEnumerate(msg_events__types)
-                                                    )[match_count_index]
+                                                    )[match_count_index],
+                                                    match_length
                                                 ),
                                                 msg_events__wasm_dex_msg_regex_matches,
+                                                -- find the "match_length" of each match array
+                                                arrayMap(
+                                                    (match) -> length(splitByChar(',', match)),
+                                                    msg_events__wasm_dex_msg_regex_matches
+                                                ),
                                                 -- find the "match_count_index" number of the each match string by counting the number of previously seen matching match strings
                                                 -- (eg. if a PlaceLimitOrder match was detected, is it PlaceLimitOrder 1 or 2 or N?)
                                                 arrayMap(

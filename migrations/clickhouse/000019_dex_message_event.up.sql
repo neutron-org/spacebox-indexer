@@ -157,7 +157,8 @@ FROM
                                         -- compare tx event types array as string against tx msg detection regex
                                         -- to find where the sub-msgs are in each CosmWasm tx `events` list
                                         extractAllGroupsHorizontal(
-                                            arrayStringConcat(msg_events__types, ','),
+                                            -- add a comma to the end so counting commas is equivalent to counting events in a "sub msg"
+                                            concat(arrayStringConcat(msg_events__types, ','), ','),
                                             -- note: this is a msg action detection regex, it can determine which Dex v5 msg was used to create this order of events
                                             --       msgs: https://github.com/neutron-org/neutron/blob/v5.1.3/proto/neutron/dex/tx.proto#L16-L28
                                             arrayStringConcat(
@@ -165,17 +166,17 @@ FROM
                                                     '(',
                                                     arrayStringConcat([
                                                         -- MsgDeposit
-                                                        '(?:message,)?(?:(?:neutron,)?(?:(?:neutron,)?TickUpdate,|TickUpdate,(?:neutron,)?)?TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer(?:,message)?',
+                                                        '(?:message,)?(?:(?:neutron,)?(?:(?:neutron,)?TickUpdate,|TickUpdate,(?:neutron,)?)?TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer(?:,message)?,',
                                                         -- MsgWithdrawal
-                                                        '(?:message,)?(?:(?:neutron,)?TickUpdate,)+(?:message,)*coin_spent,coin_received,transfer,(?:message,)?coin_spent,burn,coin_spent,coin_received,transfer(?:,message)?,neutron',
+                                                        '(?:message,)?(?:(?:neutron,)?TickUpdate,)+(?:message,)*coin_spent,coin_received,transfer,(?:message,)?coin_spent,burn,coin_spent,coin_received,transfer(?:,message)?,neutron,',
                                                         -- MsgPlaceLimitOrder
-                                                        '(?:message,)?(?:(?:neutron,)?TickUpdate(?:,TickUpdate)?,)*neutron,(?:neutron,)?(?:TickUpdate,)?TrancheUserUpdate,(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?',
+                                                        '(?:message,)?(?:(?:neutron,)?TickUpdate(?:,TickUpdate)?,)*neutron,(?:neutron,)?(?:TickUpdate,)?TrancheUserUpdate,(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?,',
                                                         -- MsgWithdrawFilledLimitOrder
-                                                        -- (unused) '(?:message,)?TrancheUserUpdate,coin_spent,coin_received,transfer(?:,message)?(?:,message)?',
+                                                        -- (unused) '(?:message,)?TrancheUserUpdate,coin_spent,coin_received,transfer(?:,message)?(?:,message)?,',
                                                         -- MsgCancelLimitOrder
-                                                        '(?:message,)?(?:TrancheUserUpdate,(?:neutron,)?TickUpdate,)+(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?(?:,message)?',
+                                                        '(?:message,)?(?:TrancheUserUpdate,(?:neutron,)?TickUpdate,)+(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?(?:,message)?,',
                                                         -- MsgMultiHopSwap
-                                                        '(?:message,)?(?:(?:neutron,)?TickUpdate(?:,TickUpdate)?,)*neutron,(?:TickUpdate,)?coin_spent,coin_received,transfer,(?:message,)?coin_spent,coin_received,transfer(?:,message)?'
+                                                        '(?:message,)?(?:(?:neutron,)?TickUpdate(?:,TickUpdate)?,)*neutron,(?:TickUpdate,)?coin_spent,coin_received,transfer,(?:message,)?coin_spent,coin_received,transfer(?:,message)?,'
                                                     ], ')|('),
                                                     ')'
                                                 ],

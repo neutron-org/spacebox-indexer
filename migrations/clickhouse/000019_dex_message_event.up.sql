@@ -44,6 +44,10 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_writer TO spacebox.dex_messa
 WITH
     -- note: this is a msg action detection regex, it can determine which Dex v5 msg was used to create this order of events
     --       msgs: https://github.com/neutron-org/neutron/blob/v5.1.3/proto/neutron/dex/tx.proto#L16-L28
+    -- test: you can test the coverage of this fingerprinting method by running this SELECT statement with the condition:
+    --           WHERE `wasm_part_index` > 0 AND empty(`msg_part_label`)
+    --           AND (hasToken(`msg_part_match`, 'TickUpdate') OR hasToken(`msg_part_match`, 'TrancheUserUpdate'))
+    --       if any rows are returned, then some TickUpdate or TrancheUserUpdate event exist outside the captured "sub msg" parts
     arrayStringConcat(
         [
             '(',

@@ -44,10 +44,19 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_writer TO spacebox.dex_messa
 WITH
     -- note: this is a msg action detection regex, it can determine which Dex v5 msg was used to create this order of events
     --       msgs: https://github.com/neutron-org/neutron/blob/v5.1.3/proto/neutron/dex/tx.proto#L16-L28
-    -- test: you can test the coverage of this fingerprinting method by running this SELECT statement with the condition:
+    -- test: negative
+    --       you can test the coverage of this fingerprinting method by running this SELECT statement with the condition:
     --           WHERE `wasm_part_index` > 0 AND empty(`msg_part_label`)
     --           AND (hasToken(`msg_part_match`, 'TickUpdate') OR hasToken(`msg_part_match`, 'TrancheUserUpdate'))
     --       if any rows are returned, then some TickUpdate or TrancheUserUpdate event exist outside the captured "sub msg" parts
+    -- test: positive
+    --       you can test that the fingerprint method has detected all msg types correctly by matching the dex action events after WASM dex action events were introduced
+    --           WHERE height > 19946990 AND `wasm_part_index` > 0
+    --           AND regex_match_label_settings[`msg_part_label`] != arrayReduce('groupUniqArray', arrayMap(
+    --               (msg_part_event) -> JSONExtractString(arrayFirst(attr -> JSONExtractString(attr, 'key') = 'action', JSONExtractArrayRaw(msg_part_event, 'attributes')), 'value'),
+    --               arrayFilter(msg_part_event -> JSONExtractString(msg_part_event, 'type') = 'message' AND arrayExists(attr -> (JSONExtractString(attr, 'key') = 'module' AND JSONExtractString(attr, 'value') = 'dex'), JSONExtractArrayRaw(msg_part_event, 'attributes')), `msg_part_events`)
+    --           ))
+    --       if any rows are returned, then some msg_parts have been mis-identified by the fingerprinting method
     arrayStringConcat(
         [
             '(',
@@ -72,15 +81,16 @@ WITH
         ''
     ) as regex_string,
     -- the labels for each message part
-    [
-        'MsgDeposit',
-        'MsgWithdrawal',
-        'MsgPlaceLimitOrder',
-        'MsgCancelLimitOrder',
-        'MsgMultiHopSwap',
-        'MsgWithdrawFilledLimitOrder',
-        'TrancheExpiration'
-    ] as regex_match_labels,
+    map(
+        'MsgDeposit', ['DepositLP'],
+        'MsgWithdrawal', ['WithdrawLP'],
+        'MsgPlaceLimitOrder', ['PlaceLimitOrder'],
+        'MsgCancelLimitOrder', ['CancelLimitOrder'],
+        'MsgMultiHopSwap', ['MultihopSwap'],
+        'MsgWithdrawFilledLimitOrder', ['MsgWithdrawFilledLimitOrder'],
+        '(TrancheExpiration)', []
+    ) as regex_match_label_settings,
+    mapKeys(regex_match_label_settings) as regex_match_labels,
     -- define join tuple parts for row fields
     msg_part_tuple.1 as `msg_part_label`,
     msg_part_tuple.2 as `msg_part_events`,

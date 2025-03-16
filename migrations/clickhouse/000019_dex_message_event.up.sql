@@ -57,10 +57,10 @@ WITH
     --               arrayFilter(msg_part_event -> JSONExtractString(msg_part_event, 'type') = 'message' AND arrayExists(attr -> (JSONExtractString(attr, 'key') = 'module' AND JSONExtractString(attr, 'value') = 'dex'), JSONExtractArrayRaw(msg_part_event, 'attributes')), `msg_part_events`)
     --           ))
     --       if any rows are returned, then some msg_parts have been mis-identified by the fingerprinting method
-    arrayStringConcat(
-        [
-            '(',
-            arrayStringConcat([
+    concat(
+        '(',
+        arrayStringConcat(
+            [
                 -- MsgDeposit
                 '(?:execute,)?(?:wasm,)?(?:message,)?(?:(?:neutron,)?(?:(?:neutron,)?TickUpdate,|TickUpdate,(?:neutron,)?)?TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer(?:,message)?,',
                 -- MsgWithdrawal
@@ -75,10 +75,10 @@ WITH
                 '(?:execute,)?(?:wasm,)?(?:message,)?TrancheUserUpdate(?:,coin_spent,coin_received,transfer,(?:message,)?)?,coin_spent,coin_received,transfer(?:,message)?(?:,message)?,',
                 -- TrancheExpiration (at end of BeginBlock only, neutron.is_expiring_limit_order = "true")
                 '(?:TickUpdate,neutron,)+'
-            ], ')|('),
-            ')'
-        ],
-        ''
+            ],
+            ')|('
+        ),
+        ')'
     ) as regex_string,
     -- the labels for each message part
     map(

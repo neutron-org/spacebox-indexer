@@ -3,15 +3,15 @@
 
 CREATE TABLE spacebox.dex_message_event_action
 (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `attributes` String,
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `attributes`        String,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for action type queries
@@ -31,15 +31,15 @@ SETTINGS index_granularity = 8192;
 -- spacebox.dex_message_event_action_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_event_action_writer TO spacebox.dex_message_event_action (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `attributes` String
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `attributes`        String
 ) AS
     WITH
         -- define event_tuple parts for row fields

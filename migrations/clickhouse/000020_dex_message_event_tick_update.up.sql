@@ -3,28 +3,28 @@
 
 CREATE TABLE spacebox.dex_message_event_tick_update
 (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `TokenZero` LowCardinality(String),
-    `TokenOne` LowCardinality(String),
-    `TokenIn` LowCardinality(String),
-    `TickIndex` Int64,
-    `Fee` UInt64,
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TokenIn`           LowCardinality(String),
+    `TickIndex`         Int64,
+    `Fee`               UInt64,
     -- note: cannot make TrancheKey nullable if it is going to be in an index
     --       LP type ticks will have empty string TrancheKey values
-    `TrancheKey` String,
-    `Reserves` UInt256,
+    `TrancheKey`        String,
+    `Reserves`          UInt256,
     -- added after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
-    `SwapAmountIn` UInt256,
-    `SwapAmountOut` UInt256,
+    `SwapAmountIn`      UInt256,
+    `SwapAmountOut`     UInt256,
     -- added to calculate SwapAmountIn/Out for DEX v<=5 events
-    `is_swap` Boolean,
+    `is_swap`           Boolean,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for token pair specific queries
@@ -45,26 +45,26 @@ SETTINGS index_granularity = 8192;
 -- spacebox.dex_message_event_tick_update_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spacebox.dex_message_event_tick_update (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `TokenZero` LowCardinality(String),
-    `TokenOne` LowCardinality(String),
-    `TokenIn` LowCardinality(String),
-    `TickIndex` Int64,
-    `Fee` UInt64,
-    `TrancheKey` String,
-    `Reserves` UInt256,
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TokenIn`           LowCardinality(String),
+    `TickIndex`         Int64,
+    `Fee`               UInt64,
+    `TrancheKey`        String,
+    `Reserves`          UInt256,
     -- added after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
-    `SwapAmountIn` UInt256,
-    `SwapAmountOut` UInt256,
+    `SwapAmountIn`      UInt256,
+    `SwapAmountOut`     UInt256,
     -- added to calculate SwapAmountIn/Out for DEX v<=5 events
-    `is_swap` Boolean
+    `is_swap`           Boolean
 ) AS
     WITH
         -- define DEX address constant

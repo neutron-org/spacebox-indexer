@@ -3,22 +3,22 @@
 
 CREATE TABLE spacebox.dex_message_event_tranche_user_update
 (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `Creator` String,
-    `TokenZero` LowCardinality(String),
-    `TokenOne` LowCardinality(String),
-    `TokenIn` LowCardinality(String),
-    `TickIndex` Int64,
-    `TrancheKey` String,
-    `SharesOwned` UInt256,
-    `SharesWithdrawn` UInt256,
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `Creator`           String,
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TokenIn`           LowCardinality(String),
+    `TickIndex`         Int64,
+    `TrancheKey`        String,
+    `SharesOwned`       UInt256,
+    `SharesWithdrawn`   UInt256,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for token pair specific queries
@@ -41,22 +41,22 @@ SETTINGS index_granularity = 8192;
 -- spacebox.dex_message_event_tranche_user_update_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_event_tranche_user_update_writer TO spacebox.dex_message_event_tranche_user_update (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `Creator` String,
-    `TokenZero` LowCardinality(String),
-    `TokenOne` LowCardinality(String),
-    `TokenIn` LowCardinality(String),
-    `TickIndex` Int64,
-    `TrancheKey` String,
-    `SharesOwned` UInt256,
-    `SharesWithdrawn` UInt256
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `Creator`           String,
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TokenIn`           LowCardinality(String),
+    `TickIndex`         Int64,
+    `TrancheKey`        String,
+    `SharesOwned`       UInt256,
+    `SharesWithdrawn`   UInt256
 ) AS
     WITH
         -- define event_tuple parts for row fields

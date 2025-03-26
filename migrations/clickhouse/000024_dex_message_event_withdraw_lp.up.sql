@@ -3,23 +3,23 @@
 
 CREATE TABLE spacebox.dex_message_event_withdraw_lp
 (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`             DateTime,
+    `height`                Int64,
+    `block_part_index`      Int8,
+    `tx_index`              Int32,
+    `event_index`           Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `Creator` String,
-    `Receiver` String,
-    `TokenZero` LowCardinality(String),
-    `TokenOne` LowCardinality(String),
-    `TickIndex` Int64,
-    `Fee` UInt64,
+    `type`                  LowCardinality(String),
+    `action`                LowCardinality(String),
+    `Creator`               String,
+    `Receiver`              String,
+    `TokenZero`             LowCardinality(String),
+    `TokenOne`              LowCardinality(String),
+    `TickIndex`             Int64,
+    `Fee`                   UInt64,
     `ReservesZeroWithdrawn` UInt256,
-    `ReservesOneWithdrawn` UInt256,
-    `SharesRemoved` UInt256,
+    `ReservesOneWithdrawn`  UInt256,
+    `SharesRemoved`         UInt256,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for token pair specific queries
@@ -41,23 +41,23 @@ SETTINGS index_granularity = 8192;
 -- spacebox.dex_message_event_withdraw_lp_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_event_withdraw_lp_writer TO spacebox.dex_message_event_withdraw_lp (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`             DateTime,
+    `height`                Int64,
+    `block_part_index`      Int8,
+    `tx_index`              Int32,
+    `event_index`           Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `Creator` String,
-    `Receiver` String,
-    `TokenZero` LowCardinality(String),
-    `TokenOne` LowCardinality(String),
-    `TickIndex` Int64,
-    `Fee` UInt64,
+    `type`                  LowCardinality(String),
+    `action`                LowCardinality(String),
+    `Creator`               String,
+    `Receiver`              String,
+    `TokenZero`             LowCardinality(String),
+    `TokenOne`              LowCardinality(String),
+    `TickIndex`             Int64,
+    `Fee`                   UInt64,
     `ReservesZeroWithdrawn` UInt256,
-    `ReservesOneWithdrawn` UInt256,
-    `SharesRemoved` UInt256
+    `ReservesOneWithdrawn`  UInt256,
+    `SharesRemoved`         UInt256
 ) AS
     WITH JSONExtractArrayRaw(`attributes`) as `event_attributes`
     SELECT

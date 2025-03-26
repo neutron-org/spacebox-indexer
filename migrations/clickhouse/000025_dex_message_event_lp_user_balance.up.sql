@@ -3,27 +3,27 @@
 
 CREATE TABLE spacebox.dex_message_event_lp_user_balance
 (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`             DateTime,
+    `height`                Int64,
+    `block_part_index`      Int8,
+    `tx_index`              Int32,
+    `event_index`           Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `Creator` String,
-    `Receiver` String,
-    `TokenZero` LowCardinality(String),
-    `TokenOne` LowCardinality(String),
-    `TickIndex` Int64,
+    `type`                  LowCardinality(String),
+    `action`                LowCardinality(String),
+    `Creator`               String,
+    `Receiver`              String,
+    `TokenZero`             LowCardinality(String),
+    `TokenOne`              LowCardinality(String),
+    `TickIndex`             Int64,
     -- align Deposit/Withdrawal pool index to TickUpdate pool indexes by adding
     -- tick indexes specific to each token side
-    `TickIndexZero` Int64,
-    `TickIndexOne` Int64,
-    `Fee` UInt64,
+    `TickIndexZero`         Int64,
+    `TickIndexOne`          Int64,
+    `Fee`                   UInt64,
     `ReservesZeroDeposited` Int256,
-    `ReservesOneDeposited` Int256,
-    `shares` Int256,
+    `ReservesOneDeposited`  Int256,
+    `shares`                Int256,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for token pair specific queries
@@ -45,25 +45,25 @@ SETTINGS index_granularity = 8192;
 -- spacebox.dex_message_event_deposit_lp_user_balance_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_event_deposit_lp_user_balance_writer TO spacebox.dex_message_event_lp_user_balance (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`             DateTime,
+    `height`                Int64,
+    `block_part_index`      Int8,
+    `tx_index`              Int32,
+    `event_index`           Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `Creator` String,
-    `Receiver` String,
-    `TokenZero` LowCardinality(String),
-    `TokenOne` LowCardinality(String),
-    `TickIndex` Int64,
-    `TickIndexZero` Int64,
-    `TickIndexOne` Int64,
-    `Fee` UInt64,
+    `type`                  LowCardinality(String),
+    `action`                LowCardinality(String),
+    `Creator`               String,
+    `Receiver`              String,
+    `TokenZero`             LowCardinality(String),
+    `TokenOne`              LowCardinality(String),
+    `TickIndex`             Int64,
+    `TickIndexZero`         Int64,
+    `TickIndexOne`          Int64,
+    `Fee`                   UInt64,
     `ReservesZeroDeposited` Int256,
-    `ReservesOneDeposited` Int256,
-    `shares` Int256
+    `ReservesOneDeposited`  Int256,
+    `shares`                Int256
 ) AS
     SELECT
         `timestamp`,
@@ -92,25 +92,25 @@ SETTINGS
 -- spacebox.dex_message_event_withdraw_lp_user_balance_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_event_withdraw_lp_user_balance_writer TO spacebox.dex_message_event_lp_user_balance (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
-    `event_index` Int32,
+    `timestamp`             DateTime,
+    `height`                Int64,
+    `block_part_index`      Int8,
+    `tx_index`              Int32,
+    `event_index`           Int32,
     -- event data
-    `type` LowCardinality(String),
-    `action` LowCardinality(String),
-    `Creator` String,
-    `Receiver` String,
-    `TokenZero` LowCardinality(String),
-    `TokenOne` LowCardinality(String),
-    `TickIndex` Int64,
-    `TickIndexZero` Int64,
-    `TickIndexOne` Int64,
-    `Fee` UInt64,
+    `type`                  LowCardinality(String),
+    `action`                LowCardinality(String),
+    `Creator`               String,
+    `Receiver`              String,
+    `TokenZero`             LowCardinality(String),
+    `TokenOne`              LowCardinality(String),
+    `TickIndex`             Int64,
+    `TickIndexZero`         Int64,
+    `TickIndexOne`          Int64,
+    `Fee`                   UInt64,
     `ReservesZeroDeposited` Int256,
-    `ReservesOneDeposited` Int256,
-    `shares` Int256
+    `ReservesOneDeposited`  Int256,
+    `shares`                Int256
 ) AS
     SELECT
         `timestamp`,

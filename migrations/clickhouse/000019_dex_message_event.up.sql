@@ -1,18 +1,18 @@
 
 CREATE TABLE spacebox.dex_message_event
 (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
+    `timestamp`                     DateTime,
+    `height`                        Int64,
+    `block_part_index`              Int8,
+    `tx_index`                      Int32,
     -- msg data
-    `msg_part_index` Int16,
-    `msg_indexes` Array(Int16),
+    `msg_part_index`                Int16,
+    `msg_indexes`                   Array(Int16),
     -- wasm msg data
-    `wasm_part_index` Int16,
+    `wasm_part_index`               Int16,
     -- event data
-    `msg_part_events_index_offset` Int32,
-    `msg_part_events` Array(String)
+    `msg_part_events_index_offset`  Int32,
+    `msg_part_events`               Array(String)
 )
 ENGINE = ReplacingMergeTree
 ORDER BY (
@@ -28,18 +28,18 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_event_writer TO spacebox.dex_message_event
 (
-    `timestamp` DateTime,
-    `height` Int64,
-    `block_part_index` Int8,
-    `tx_index` Int32,
+    `timestamp`                     DateTime,
+    `height`                        Int64,
+    `block_part_index`              Int8,
+    `tx_index`                      Int32,
     -- msg data
-    `msg_part_index` Int16,
-    `msg_indexes` Array(Int16),
+    `msg_part_index`                Int16,
+    `msg_indexes`                   Array(Int16),
     -- wasm msg data
-    `wasm_part_index` Int16,
+    `wasm_part_index`               Int16,
     -- event data
-    `msg_part_events_index_offset` Int32,
-    `msg_part_events` Array(String)
+    `msg_part_events_index_offset`  Int32,
+    `msg_part_events`               Array(String)
 ) AS
 WITH
     -- note: this is a msg action detection regex, it can determine which Dex v5 msg was used to create this order of events

@@ -8,6 +8,9 @@ CREATE TABLE spacebox.dex_message_event_lp_user_balance
     `block_part_index`      Int8,
     `tx_index`              Int32,
     `event_index`           Int32,
+    -- add computed sort key for easier event ordering
+    `sort_key`          Tuple(Int64, Int8, Int32, Int32)
+                        MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
     -- event data
     `type`                  LowCardinality(String),
     `action`                LowCardinality(String),

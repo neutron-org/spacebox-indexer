@@ -87,7 +87,7 @@ WITH
         'MsgPlaceLimitOrder', ['PlaceLimitOrder'],
         'MsgCancelLimitOrder', ['CancelLimitOrder'],
         'MsgMultiHopSwap', ['MultihopSwap'],
-        'MsgWithdrawFilledLimitOrder', ['MsgWithdrawFilledLimitOrder'],
+        'MsgWithdrawFilledLimitOrder', ['WithdrawLimitOrder'],
         '(TrancheExpiration)', []
     ) as regex_match_label_settings,
     mapKeys(regex_match_label_settings) as regex_match_labels,

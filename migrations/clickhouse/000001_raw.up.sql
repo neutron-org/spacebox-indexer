@@ -206,3 +206,64 @@ SELECT parseDateTimeBestEffortOrZero(JSONExtractString(message, 'genesis_time'))
        JSONExtractString(message, 'app_state')                                   AS app_state
 FROM spacebox.raw_genesis_topic
 GROUP BY genesis_time, chain_id, initial_height, consensus_params, app_hash, app_state;
+
+-- spacebox.raw_slinky_prices_topic definition
+
+CREATE TABLE spacebox.raw_slinky_prices_topic
+(
+    `message` String
+)
+    ENGINE = Kafka
+        SETTINGS kafka_broker_list = 'kafka:9093',
+            kafka_topic_list = 'raw_slinky_prices',
+            kafka_group_name = 'spacebox',
+            kafka_format = 'JSONAsString';
+
+-- spacebox.raw_slinky_prices definition
+
+CREATE TABLE spacebox.raw_slinky_prices
+(
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `id`                UInt16,
+    `base`              LowCardinality(String),
+    `quote`             LowCardinality(String),
+    `price`             UInt128,
+    `decimals`          UInt8,
+    `nonce`             UInt64,
+    `quote_id`          Nullable(UInt16)
+)
+    ENGINE = ReplacingMergeTree
+        ORDER BY (height, id)
+        SETTINGS index_granularity = 8192;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS raw_slinky_prices_consumer TO spacebox.raw_slinky_prices AS
+SELECT
+    parseDateTimeBestEffortOrZero(price_tuple.1)    AS `timestamp`,
+    toInt64OrZero(price_tuple.2)                    AS `height`,
+    toInt16OrZero(price_tuple.3)                    AS `id`,
+    price_tuple.4                                   AS `base`,
+    price_tuple.5                                   AS `quote`,
+    toUInt128OrZero(price_tuple.6)                  AS `price`,
+    toUInt8OrZero(price_tuple.7)                    AS `decimals`,
+    toUInt64OrZero(price_tuple.8)                   AS `nonce`,
+    -- add quote ID (when available) to double check any mis-matches
+    toUInt16OrNull(price_tuple.9)                   AS `quote_id`
+FROM spacebox.raw_slinky_prices_topic
+ARRAY JOIN
+    arrayMap(
+        (mapping, price) -> (
+            JSONExtractString(price, 'price', 'block_timestamp'),
+            JSONExtractString(price, 'price', 'block_height'),
+            JSONExtractString(price, 'id'),
+            JSONExtractString(mapping, 'currency_pair', 'Base'),
+            JSONExtractString(mapping, 'currency_pair', 'Quote'),
+            JSONExtractString(price, 'price', 'price'),
+            JSONExtractString(price, 'decimals'),
+            JSONExtractString(price, 'nonce'),
+            JSONExtractString(mapping, 'id')
+        ),
+        JSONExtractArrayRaw(message, 'mappings'),
+        JSONExtractArrayRaw(message, 'prices')
+    ) as price_tuple
+    WHERE height > 0

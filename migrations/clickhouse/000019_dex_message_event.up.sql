@@ -69,7 +69,7 @@ WITH
                 arrayStringConcat(
                     [
                         -- MsgDeposit
-                        '(?:execute,)?(?:wasm,)?(?:message,)?(?:(?:neutron,)?(?:(?:neutron,)?TickUpdate,|TickUpdate,(?:neutron,)?)?TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer(?:,message)?,',
+                        '(?:execute,)?(?:wasm,)?(?:reply,wasm,)*(?:message,)?(?:(?:neutron,)?(?:(?:neutron,)?TickUpdate,|TickUpdate,(?:neutron,)?)?TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer,(?:message,)?(?:reply,wasm,)?',
                         -- MsgWithdrawal
                         '(?:execute,)?(?:wasm,)?(?:message,)?(?:(?:neutron,)?TickUpdate,)+(?:message,)*coin_spent,coin_received,transfer,(?:message,)?coin_spent,burn(?:,coin_spent,coin_received,transfer(?:,message)?,neutron)+,',
                         -- MsgPlaceLimitOrder
@@ -81,7 +81,7 @@ WITH
                         -- MsgWithdrawFilledLimitOrder
                         '(?:execute,)?(?:wasm,)?(?:message,)?TrancheUserUpdate(?:,coin_spent,coin_received,transfer,(?:message,)?)?,coin_spent,coin_received,transfer(?:,message)?(?:,message)?,',
                         -- TrancheExpiration (at end of BeginBlock only, neutron.is_expiring_limit_order = "true")
-                        '(?:TickUpdate,neutron,)+'
+                        '(?:TickUpdate,neutron,)+(?:neutron,)?(?:coin_received,coinbase,coin_spent,coin_received,transfer,)?(?:reply,wasm,)?'
                     ],
                     ')|('
                 ),

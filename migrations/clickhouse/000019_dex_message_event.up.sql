@@ -57,10 +57,10 @@ WITH
             -- test: positive
             --       you can test that the fingerprint method has detected all msg types correctly by matching the dex action events after WASM dex action events were introduced
             --           WHERE height > 19946990 AND `wasm_part_index` > 0
-            --           AND regex_match_label_settings[`msg_part_label`] != arrayReduce('groupUniqArray', arrayMap(
-            --               (msg_part_event) -> JSONExtractString(arrayFirst(attr -> JSONExtractString(attr, 'key') = 'action', JSONExtractArrayRaw(msg_part_event, 'attributes')), 'value'),
+            --           AND arrayExists(
+            --               (msg_part_event) -> NOT has(regex_match_label_settings[`msg_part_label`], JSONExtractString(arrayFirst(attr -> JSONExtractString(attr, 'key') = 'action', JSONExtractArrayRaw(msg_part_event, 'attributes')), 'value')),
             --               arrayFilter(msg_part_event -> JSONExtractString(msg_part_event, 'type') = 'message' AND arrayExists(attr -> (JSONExtractString(attr, 'key') = 'module' AND JSONExtractString(attr, 'value') = 'dex'), JSONExtractArrayRaw(msg_part_event, 'attributes')), `msg_part_events`)
-            --           ))
+            --           )
             --       if any rows are returned, then some msg_parts have been mis-identified by the fingerprinting method
             concat(
                 '(',
@@ -92,7 +92,8 @@ WITH
                 'MsgPlaceLimitOrder', ['PlaceLimitOrder'],
                 'MsgCancelLimitOrder', ['CancelLimitOrder'],
                 'MsgMultiHopSwap', ['MultihopSwap'],
-                'MsgWithdrawFilledLimitOrder', ['WithdrawLimitOrder'],
+                -- 'CancelLimitOrder' can now be used in place of 'WithdrawLimitOrder' when the limit order is fully filled or expired
+                'MsgWithdrawFilledLimitOrder', ['WithdrawLimitOrder', 'CancelLimitOrder'],
                 '(TrancheExpiration)', []
             ) as regex_match_label_settings,
             mapKeys(regex_match_label_settings) as regex_match_labels

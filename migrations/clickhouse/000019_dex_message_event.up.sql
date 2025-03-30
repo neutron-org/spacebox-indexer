@@ -12,7 +12,8 @@ CREATE TABLE spacebox.dex_message_event
     `wasm_part_index`               Int16,
     -- event data
     `msg_part_events_index_offset`  Int32,
-    `msg_part_events`               Array(String)
+    `msg_part_events`               Array(String),
+    `msg_part_label`                LowCardinality(String)
 )
 ENGINE = ReplacingMergeTree
 ORDER BY (
@@ -39,7 +40,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_writer TO spacebox.dex_messa
     `wasm_part_index`               Int16,
     -- event data
     `msg_part_events_index_offset`  Int32,
-    `msg_part_events`               Array(String)
+    `msg_part_events`               Array(String),
+    `msg_part_label`                LowCardinality(String)
 ) AS
 WITH
     message_parts AS (
@@ -315,7 +317,8 @@ SELECT
         toInt16(0)
     ) as `wasm_part_index`,
     `msg_events_index_offset` + `msg_part_event_start_offset` as `msg_part_events_index_offset`,
-    `msg_part_events`
+    `msg_part_events`,
+    `msg_part_label`
 FROM
     message_parts_with_sub_msg_parts
     ARRAY JOIN (`sub_msg_parts`) AS `msg_part_tuple`,

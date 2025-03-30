@@ -107,18 +107,7 @@ WITH
                             -- todo: replace check with height condition when fix release version height is known
                             --       eg. `height < 25000000`
                             -- current check: decompose all wasm msgs that don't have TickUpdate.SwapAmountIn attributes
-                            not(has(msg_events__types, 'wasm')) OR
-                            arrayExists(
-                                -- test for SwapAmountIn presence on TickUpdate events
-                                (msg_event) -> (
-                                    JSONExtractString(msg_event, 'type') = 'TickUpdate' AND
-                                    arrayExists(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'SwapAmountIn',
-                                        JSONExtractArrayRaw(msg_event, 'attributes')
-                                    )
-                                ),
-                                msg_events
-                            ),
+                            not(has(msg_events__types, 'wasm')),
                             -- pass the message as not requiring decomposition
                             [[[[(
                                 -- tuple.1 label

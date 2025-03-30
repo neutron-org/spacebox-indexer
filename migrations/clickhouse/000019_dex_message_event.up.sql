@@ -51,12 +51,12 @@ WITH
             --       msgs: https://github.com/neutron-org/neutron/blob/v5.1.3/proto/neutron/dex/tx.proto#L16-L28
             -- test: negative
             --       you can test the coverage of this fingerprinting method by running this SELECT statement with the condition:
-            --           WHERE `wasm_part_index` > 0 AND empty(`msg_part_label`)
-            --           AND (hasToken(`msg_part_match`, 'TickUpdate') OR hasToken(`msg_part_match`, 'TrancheUserUpdate'))
+            --           WHERE (`wasm_part_index` = 0 AND empty(`msg_part_label`)) OR (`wasm_part_index` > 0 AND empty(`msg_part_label`)
+            --           AND (hasToken(`msg_part_match`, 'TickUpdate') OR hasToken(`msg_part_match`, 'TrancheUserUpdate')))
             --       if any rows are returned, then some TickUpdate or TrancheUserUpdate event exist outside the captured "sub msg" parts
             -- test: positive
             --       you can test that the fingerprint method has detected all msg types correctly by matching the dex action events after WASM dex action events were introduced
-            --           WHERE height > 19946990 AND `wasm_part_index` > 0
+            --           WHERE ((height > 19946990 AND `wasm_part_index` > 0) OR (`wasm_part_index` = 0))
             --           AND arrayExists(
             --               (msg_part_event) -> NOT has(regex_match_label_settings[`msg_part_label`], JSONExtractString(arrayFirst(attr -> JSONExtractString(attr, 'key') = 'action', JSONExtractArrayRaw(msg_part_event, 'attributes')), 'value')),
             --               arrayFilter(msg_part_event -> JSONExtractString(msg_part_event, 'type') = 'message' AND arrayExists(attr -> (JSONExtractString(attr, 'key') = 'module' AND JSONExtractString(attr, 'value') = 'dex'), JSONExtractArrayRaw(msg_part_event, 'attributes')), `msg_part_events`)
@@ -109,21 +109,36 @@ WITH
                             --       eg. `height < 25000000`
                             -- current check: decompose all wasm msgs that don't have TickUpdate.SwapAmountIn attributes
                             not(has(msg_events__types, 'wasm')),
-                            -- pass the message as not requiring decomposition
-                            [[[[(
-                                -- tuple.1 label
-                                '',
-                                -- tuple.2 msg_events,
-                                `msg_events`,
-                                -- tuple.3 msg_event_start_offset (offset starting from 0)
-                                toUInt64(0),
-                                -- tuple.4 msg_event_end_offset
-                                length(`msg_events`),
-                                -- tuple.5 next_string_match_after_end_position
-                                toUInt64(0),
-                                -- tuple.6 msg_part_match
-                                ''
-                            )]]]],
+                            -- the message does not require decomposition, but we can still label it based on fingerprinting
+                            arrayMap(
+                                (match_groups) -> arrayMap(
+                                    (match_groups_index) -> (
+                                        [[(
+                                            -- tuple.1 label
+                                            regex_match_labels[match_groups_index],
+                                            -- tuple.2 msg_events,
+                                            `msg_events`,
+                                            -- tuple.3 msg_event_start_offset (offset starting from 0)
+                                            toUInt64(0),
+                                            -- tuple.4 msg_event_end_offset
+                                            length(`msg_events`),
+                                            -- tuple.5 next_string_match_after_end_position
+                                            toUInt64(0),
+                                            -- tuple.6 msg_part_match
+                                            match_groups[match_groups_index]
+                                        )]]
+                                    ),
+                                    [arrayFirstIndex(match -> notEmpty(match), match_groups)]
+                                ),
+                                -- match *one* group out of the possible fingerprints
+                                [extractGroups(
+                                    -- add a comma to the end so counting commas is equivalent to counting events in a "sub msg"
+                                    concat(arrayStringConcat(msg_events__types, ','), ',') as msg_events__types_string,
+                                    -- note: this is a msg action detection regex, it can determine which Dex v5 msg was used to create this order of events
+                                    --       msgs: https://github.com/neutron-org/neutron/blob/v5.1.3/proto/neutron/dex/tx.proto#L16-L28
+                                    regex_string
+                                )]
+                            ),
                             -- compute out all the DEX msg parts of each message
                             arrayMap(
                                 (match_groups_array) -> arrayMap(

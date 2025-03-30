@@ -272,7 +272,9 @@ WITH
                         )]
                     )
                 )
-            ) as `sub_msg_parts`
+            ) as `sub_msg_parts`,
+            -- pass for validation queries
+            regex_match_label_settings
         FROM message_parts
     ),
     -- define join tuple parts for row fields

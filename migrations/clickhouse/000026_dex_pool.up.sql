@@ -47,7 +47,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_pool_writer TO spacebox.dex_pool (
     `tx_index`          Int32,
     `event_index`       Int32,
     -- bank event data
-    `pool_id`           UInt128,
+    `pool_id`           UInt64,
     -- dex event data
     `action`            LowCardinality(String),
     `TokenZero`         LowCardinality(String),
@@ -117,7 +117,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_pool_writer TO spacebox.dex_pool (
         `tx_index`,
         `event_index`,
         -- add bank event attributes
-        pool_tuples[deposit_index].1 AS `pool_id`,
+        toUInt64(pool_tuples[deposit_index].1) AS `pool_id`,
         -- add deposit event attributes
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,

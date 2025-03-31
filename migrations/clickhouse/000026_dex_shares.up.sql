@@ -1,7 +1,7 @@
 
--- spacebox.dex_pool table
+-- spacebox.dex_shares table
 
-CREATE TABLE spacebox.dex_pool
+CREATE TABLE spacebox.dex_shares
 (
     `timestamp`         DateTime,
     `height`            Int64,
@@ -37,9 +37,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_pool_deposit_writer source
+-- spacebox.dex_shares_deposit_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_pool_deposit_writer TO spacebox.dex_pool (
+CREATE MATERIALIZED VIEW spacebox.dex_shares_deposit_writer TO spacebox.dex_shares (
     `timestamp`         DateTime,
     `height`            Int64,
     `block_part_index`  Int8,
@@ -184,14 +184,13 @@ CREATE MATERIALIZED VIEW spacebox.dex_pool_deposit_writer TO spacebox.dex_pool (
             )]
         )
     ) AS `event_tuple`
-    -- test mainnet with: WHERE height = 7115050
 SETTINGS
     -- allow bigger blocks because transformation is easier
     max_block_size = 1000;
 
--- spacebox.dex_pool_withdrawal_writer source
+-- spacebox.dex_shares_withdrawal_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_pool_withdrawal_writer TO spacebox.dex_pool (
+CREATE MATERIALIZED VIEW spacebox.dex_shares_withdrawal_writer TO spacebox.dex_shares (
     `timestamp`         DateTime,
     `height`            Int64,
     `block_part_index`  Int8,

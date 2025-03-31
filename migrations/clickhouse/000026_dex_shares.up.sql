@@ -245,7 +245,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_withdrawal_writer TO spacebox.dex_s
                     )
                 ),
                 arrayFilter(
-                    (msg_part_event) -> JSONExtractString(msg_part_event, 'type') = 'coinbase',
+                    (msg_part_event) -> JSONExtractString(msg_part_event, 'type') = 'burn',
                     `msg_part_events`
                 )
             )

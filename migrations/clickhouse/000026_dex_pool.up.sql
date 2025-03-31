@@ -11,21 +11,18 @@ CREATE TABLE spacebox.dex_pool
     -- add computed sort key for easier event ordering
     `sort_key`          Tuple(Int64, Int8, Int32, Int32)
                         MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
-    -- bank event data
-    `pool_id`           UInt128,
-    -- dex event data
+    -- event data
     `action`            LowCardinality(String),
     `TokenZero`         LowCardinality(String),
     `TokenOne`          LowCardinality(String),
     `TickIndex`         Int64,
     `Fee`               UInt64,
+    `PoolId`            Int128, -- actually UInt64 but we need -1 for "unsure"
     `amount`            UInt128,
-    -- combination event data
-    `amount_check`      Boolean,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for pool_id type queries
-    INDEX `pool_id_index` (`pool_id`) TYPE set(0)
+    INDEX `pool_id_index` (`PoolId`) TYPE set(0)
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
@@ -46,14 +43,13 @@ CREATE MATERIALIZED VIEW spacebox.dex_pool_writer TO spacebox.dex_pool (
     `block_part_index`  Int8,
     `tx_index`          Int32,
     `event_index`       Int32,
-    -- bank event data
-    `pool_id`           Int128, -- actually UInt64 but we need -1 for "unsure"
-    -- dex event data
+    -- event data
     `action`            LowCardinality(String),
     `TokenZero`         LowCardinality(String),
     `TokenOne`          LowCardinality(String),
     `TickIndex`         Int64,
     `Fee`               UInt64,
+    `PoolId`            Int128,
     `amount`            UInt128
 ) AS
     WITH
@@ -113,25 +109,29 @@ CREATE MATERIALIZED VIEW spacebox.dex_pool_writer TO spacebox.dex_pool (
         -- define event_tuple parts for row fields
         event_tuple.1 as `event_index`,
         event_tuple.2 as `deposit_index`,
-        event_tuple.3 as `event_attributes`
+        event_tuple.3 as `event_attributes`,
+        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'PoolId'), `event_attributes`), 'value') AS `maybe_pool_id`
     SELECT
         `timestamp`,
         `height`,
         `block_part_index`,
         `tx_index`,
         `event_index`,
-        -- add bank event attributes
-        if (
-            found_pool_tuple.2 > 0,
-            found_pool_tuple.1,
-            toInt128(-1)
-        ) AS `pool_id`,
-        -- add deposit event attributes
+        -- add event attributes
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenOne'), `event_attributes`), 'value') AS `TokenOne`,
         toInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TickIndex'), `event_attributes`), 'value')) AS `TickIndex`,
         toUInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value')) AS `Fee`,
+        if (
+            notEmpty(`maybe_pool_id`),
+            toInt128(`maybe_pool_id`),
+            if (
+                found_pool_tuple.2 > 0,
+                found_pool_tuple.1,
+                toInt128(-1)
+            )
+        ) AS `PoolId`,
         toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesMinted'), `event_attributes`), 'value')) AS `amount`
     FROM spacebox.dex_message_event
     ARRAY JOIN arrayFlatten(

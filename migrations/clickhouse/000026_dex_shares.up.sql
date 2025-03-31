@@ -13,6 +13,7 @@ CREATE TABLE spacebox.dex_shares
                         MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
     -- event data
     `action`            LowCardinality(String),
+    `Receiver`          String,
     `TokenZero`         LowCardinality(String),
     `TokenOne`          LowCardinality(String),
     `TickIndex`         Int64,
@@ -20,7 +21,7 @@ CREATE TABLE spacebox.dex_shares
     `PoolId`            Int128, -- actually UInt64 but we need -1 for "unsure"
     -- save boolean for credit/debit
     `credit`            Boolean MATERIALIZED `action` = 'DepositLP',
-    `amount`            UInt128,
+    `shares`            UInt128,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for pool_id type queries
@@ -47,12 +48,13 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_deposit_writer TO spacebox.dex_shar
     `event_index`       Int32,
     -- event data
     `action`            LowCardinality(String),
+    `Receiver`          String,
     `TokenZero`         LowCardinality(String),
     `TokenOne`          LowCardinality(String),
     `TickIndex`         Int64,
     `Fee`               UInt64,
     `PoolId`            Int128,
-    `amount`            UInt128
+    `shares`            UInt128
 ) AS
     WITH
         -- get shares info from coinbase events (should only be one coinbase event)
@@ -105,7 +107,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_deposit_writer TO spacebox.dex_shar
             `pool_tuples`
         ) as `unique_pool_tuples`,
         arrayFirst(
-            (pool_tuple) -> pool_tuple.2 = `amount`,
+            (pool_tuple) -> pool_tuple.2 = `shares`,
             `unique_pool_tuples`
         ) as `found_pool_tuple`,
         -- define event_tuple parts for row fields
@@ -121,6 +123,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_deposit_writer TO spacebox.dex_shar
         `event_index`,
         -- add event attributes
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
+        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Receiver'), `event_attributes`), 'value') AS `Receiver`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenOne'), `event_attributes`), 'value') AS `TokenOne`,
         toInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TickIndex'), `event_attributes`), 'value')) AS `TickIndex`,
@@ -134,7 +137,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_deposit_writer TO spacebox.dex_shar
                 toInt128(-1)
             )
         ) AS `PoolId`,
-        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesMinted'), `event_attributes`), 'value')) AS `amount`
+        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesMinted'), `event_attributes`), 'value')) AS `shares`
     FROM spacebox.dex_message_event
     ARRAY JOIN arrayFlatten(
         -- Extract "message part" events with event_index
@@ -198,12 +201,13 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_withdrawal_writer TO spacebox.dex_s
     `event_index`       Int32,
     -- event data
     `action`            LowCardinality(String),
+    `Receiver`          String,
     `TokenZero`         LowCardinality(String),
     `TokenOne`          LowCardinality(String),
     `TickIndex`         Int64,
     `Fee`               UInt64,
     `PoolId`            Int128,
-    `amount`            UInt128
+    `shares`            UInt128
 ) AS
     WITH
         -- get shares info from coinbase events (should only be one coinbase event)
@@ -256,7 +260,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_withdrawal_writer TO spacebox.dex_s
             `pool_tuples`
         ) as `unique_pool_tuples`,
         arrayFirst(
-            (pool_tuple) -> pool_tuple.2 = `amount`,
+            (pool_tuple) -> pool_tuple.2 = `shares`,
             `unique_pool_tuples`
         ) as `found_pool_tuple`,
         -- define event_tuple parts for row fields
@@ -272,6 +276,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_withdrawal_writer TO spacebox.dex_s
         `event_index`,
         -- add event attributes
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
+        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Receiver'), `event_attributes`), 'value') AS `Receiver`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenOne'), `event_attributes`), 'value') AS `TokenOne`,
         toInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TickIndex'), `event_attributes`), 'value')) AS `TickIndex`,
@@ -285,7 +290,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_withdrawal_writer TO spacebox.dex_s
                 toInt128(-1)
             )
         ) AS `PoolId`,
-        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesRemoved'), `event_attributes`), 'value')) AS `amount`
+        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesRemoved'), `event_attributes`), 'value')) AS `shares`
     FROM spacebox.dex_message_event
     ARRAY JOIN arrayFlatten(
         -- Extract "message part" events with event_index

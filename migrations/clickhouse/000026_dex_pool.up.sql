@@ -47,16 +47,14 @@ CREATE MATERIALIZED VIEW spacebox.dex_pool_writer TO spacebox.dex_pool (
     `tx_index`          Int32,
     `event_index`       Int32,
     -- bank event data
-    `pool_id`           UInt64,
+    `pool_id`           Int128, -- actually UInt64 but we need -1 for "unsure"
     -- dex event data
     `action`            LowCardinality(String),
     `TokenZero`         LowCardinality(String),
     `TokenOne`          LowCardinality(String),
     `TickIndex`         Int64,
     `Fee`               UInt64,
-    `amount`            UInt128,
-    -- combination event data
-    `amount_check`      Boolean
+    `amount`            UInt128
 ) AS
     WITH
         -- get shares info from coinbase events (should only be one coinbase event)
@@ -67,24 +65,21 @@ CREATE MATERIALIZED VIEW spacebox.dex_pool_writer TO spacebox.dex_pool (
                     (coin_parts) -> (
                         -- get the coin string parts corresponding the the DepositLP event
                         -- pool_tuple.1: pool_id
-                        coin_parts[2],
+                        toInt128OrZero(coin_parts[2]),
                         -- pool_tuple.2: pool_amount
-                        coin_parts[1]
+                        toUInt128OrZero(coin_parts[1])
                     ),
                     arraySort(
                         -- sort by numeric ID in ascending order (originally sorted lexically)
                         (coin_parts) -> coin_parts[2],
                         arrayFilter(
                             (coin_parts) -> (
-                                coin_parts[1] > 0 AND
+                                toUInt128OrZero(coin_parts[1]) > 0 AND
                                 length(coin_parts) = 2
                             ),
                             arrayMap(
                                 -- turn coins string into coin parts [amount, denom]
-                                (coins) -> arrayMap(
-                                    (coin_part) -> toUInt128OrZero(coin_part),
-                                    splitByString('neutron/pool/', coins)
-                                ),
+                                (coins) -> splitByString('neutron/pool/', coins),
                                 -- get each coins string from the coinbase amount
                                 splitByChar(
                                     ',',
@@ -106,6 +101,15 @@ CREATE MATERIALIZED VIEW spacebox.dex_pool_writer TO spacebox.dex_pool (
                 )
             )
         ) as `pool_tuples`,
+        -- filter to only non-unique pool_amounts (need to fetch more context)
+        arrayFilter(
+            (pool_tuple) -> arrayCount((t) -> t.2 = pool_tuple.2, `pool_tuples`) = 1,
+            `pool_tuples`
+        ) as `unique_pool_tuples`,
+        arrayFirst(
+            (pool_tuple) -> pool_tuple.2 = `amount`,
+            `unique_pool_tuples`
+        ) as `found_pool_tuple`,
         -- define event_tuple parts for row fields
         event_tuple.1 as `event_index`,
         event_tuple.2 as `deposit_index`,
@@ -117,16 +121,18 @@ CREATE MATERIALIZED VIEW spacebox.dex_pool_writer TO spacebox.dex_pool (
         `tx_index`,
         `event_index`,
         -- add bank event attributes
-        toUInt64(pool_tuples[deposit_index].1) AS `pool_id`,
+        if (
+            found_pool_tuple.2 > 0,
+            found_pool_tuple.1,
+            toInt128(-1)
+        ) AS `pool_id`,
         -- add deposit event attributes
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,
         JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenOne'), `event_attributes`), 'value') AS `TokenOne`,
         toInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TickIndex'), `event_attributes`), 'value')) AS `TickIndex`,
         toUInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value')) AS `Fee`,
-        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesMinted'), `event_attributes`), 'value')) AS `amount`,
-        -- add combination event attribute check value
-        `amount` = pool_tuples[deposit_index].2 as `amount_check`
+        toUInt128(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesMinted'), `event_attributes`), 'value')) AS `amount`
     FROM spacebox.dex_message_event
     ARRAY JOIN arrayFlatten(
         -- Extract "message part" events with event_index

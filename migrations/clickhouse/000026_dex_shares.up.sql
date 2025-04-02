@@ -24,18 +24,14 @@ CREATE TABLE spacebox.dex_shares
     `shares`            UInt128,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
+    -- add index for pool (by attributes) type queries
+    INDEX `pool_attributes_index` (`TokenZero`, `TokenOne`, `TickIndex`, `Fee`) TYPE set(0),
     -- add index for pool_id type queries
     INDEX `pool_id_index` (`PoolId`) TYPE set(0)
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
-ORDER BY (
-    -- the minimum unique parts needed to describe a unique Dex event
-    `height`,
-    `block_part_index`,
-    `tx_index`,
-    `event_index`
-)
+ORDER BY `sort_key`
 SETTINGS index_granularity = 8192;
 
 -- spacebox.dex_shares_deposit_writer source

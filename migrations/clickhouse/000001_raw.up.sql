@@ -223,6 +223,9 @@ CREATE TABLE spacebox.raw_slinky_prices_topic
 
 CREATE TABLE spacebox.raw_slinky_prices
 (
+    -- add pair_id for optimized queries
+    `pair_id`			LowCardinality(String)
+                        MATERIALIZED concat(`base`, '-', `quote`),
     `timestamp`         DateTime,
     `height`            Int64,
     `id`                UInt16,
@@ -234,8 +237,9 @@ CREATE TABLE spacebox.raw_slinky_prices
     `quote_id`          Nullable(UInt16)
 )
     ENGINE = ReplacingMergeTree
-        ORDER BY (height, id)
-        SETTINGS index_granularity = 8192;
+        PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
+        ORDER BY (`pair_id`, `timestamp`) -- queries should contain `base` and `quote` in a single string for max performance
+    SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS raw_slinky_prices_consumer TO spacebox.raw_slinky_prices AS
 SELECT

@@ -8,6 +8,8 @@ CREATE TABLE spacebox.dex_vaults_message_event_instantiate
     `block_part_index`          Int8,
     `tx_index`                  Int32,
     `event_index`               Int32,
+    -- related event data
+    `code_id`                   UInt64,
     -- event data
     `type`                      LowCardinality(String),
     `action`                    LowCardinality(String),
@@ -54,6 +56,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_message_event_instantiate_writer TO
     `block_part_index`          Int8,
     `tx_index`                  Int32,
     `event_index`               Int32,
+    -- related event data
+    `code_id`                   UInt64,
     -- event data
     `type`                      LowCardinality(String),
     `action`                    LowCardinality(String),
@@ -79,7 +83,9 @@ WITH
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
     event_tuple.2 as `event_type`,
-    event_tuple.3 as `event_attributes`
+    event_tuple.3 as `event_attributes`,
+    event_tuple.4 as `instantiate_event_attributes`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `instantiate_event_attributes`), 'value') AS `instantiate_contract_address`
 SELECT
     `timestamp`,
     `height`,
@@ -87,7 +93,9 @@ SELECT
     `tx_index`,
     `event_index`,
     `event_type` as `type`,
-    -- add event attributes
+    -- add instantiate event attributes
+    toUInt64OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'code_id'), `instantiate_event_attributes`), 'value')) AS `code_id`,
+    -- add wasm event attributes
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract`,
     extractAllGroupsVertical(
@@ -114,38 +122,51 @@ ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
         arrayMap(
-            (msg_event, msg_event_index) -> arrayMap(
-                (msg_event_attributes) -> (
-                    -- event_tuple.1: event_index
-                    toInt32(`msg_events_index_offset` + msg_event_index - 1),
-                    -- event_tuple.2: event_type
-                    JSONExtractString(msg_event, 'type'),
-                    -- event_tuple.3: event_attributes
-                    JSONExtractArrayRaw(msg_event, 'attributes')
-                ),
-                -- filter to only possible supervault instantiate events
-                arrayFilter(
+            (msg_instantiate_event_attributes) -> arrayMap(
+                (msg_event, msg_event_index) -> arrayMap(
                     (msg_event_attributes) -> (
-                        JSONExtractString(
-                            arrayFirst(
-                                (attr) -> JSONExtractString(attr, 'key') = 'action',
-                                msg_event_attributes
-                            ),
-                            'value'
-                        ) = 'instantiate IMM'
+                        -- event_tuple.1: event_index
+                        toInt32(`msg_events_index_offset` + msg_event_index - 1),
+                        -- event_tuple.2: event_type
+                        JSONExtractString(msg_event, 'type'),
+                        -- event_tuple.3: event_attributes
+                        msg_event_attributes,
+                        -- event_tuple.4: related instantiate_event_attributes
+                        msg_instantiate_event_attributes
                     ),
-                    arrayMap(
-                        (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
-                        arrayFilter(
-                            msg_event -> JSONExtractString(msg_event, 'type') = 'wasm',
-                            [msg_event]
+                    -- filter to only possible supervault instantiate events
+                    arrayFilter(
+                        (msg_event_attributes) -> (
+                            JSONExtractString(
+                                arrayFirst(
+                                    (attr) -> JSONExtractString(attr, 'key') = 'action',
+                                    msg_event_attributes
+                                ),
+                                'value'
+                            ) = 'instantiate IMM'
+                        ),
+                        arrayMap(
+                            (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                            arrayFilter(
+                                msg_event -> JSONExtractString(msg_event, 'type') = 'wasm',
+                                [msg_event]
+                            )
                         )
                     )
-                )
+                ),
+                -- enumerate each (msg_event, msg_event_index) within a message part
+                `msg_events`,
+                arrayEnumerate(`msg_events`)
             ),
-            -- enumerate each (msg_event, msg_event_index) within a message part
-            `msg_events`,
-            arrayEnumerate(`msg_events`)
+            -- get instantiate event attributes (if it exists)
+            arrayMap(
+                (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                arrayFilter(
+                    (msg_event) -> JSONExtractString(msg_event, 'type') = 'instantiate',
+                    `msg_events`
+                )
+            )
         )
     )
 ) AS `event_tuple`
+WHERE `code_id` > 0 AND `instantiate_contract_address` = `contract`

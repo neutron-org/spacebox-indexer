@@ -91,10 +91,10 @@ SELECT
     `block_part_index`,
     `tx_index`,
     `event_index`,
-    `event_type` as `type`,
     -- add instantiate event attributes
     toUInt64OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'code_id'), `instantiate_event_attributes`), 'value')) AS `code_id`,
     -- add wasm event attributes
+    `event_type` as `type`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract`,
     extractAllGroupsVertical(

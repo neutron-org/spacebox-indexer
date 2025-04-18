@@ -97,10 +97,13 @@ SELECT
     `event_type` as `type`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract`,
-    extractAllGroupsVertical(
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'owner'), `event_attributes`), 'value'),
-        'Addr\(\"([a-z]+[a-z0-9]{30,})"\)'
-    ) AS `owner`,
+    arrayMap(
+        (matches) -> arrayFirst((match) -> notEmpty(match), matches),
+        extractAllGroupsVertical(
+            JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'owner'), `event_attributes`), 'value'),
+            'Addr\(\"([a-z]+[a-z0-9]{30,})"\)'
+        )
+     ) AS `owner`,
     toUInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_a'), `event_attributes`), 'value')) AS `max_blocks_stale_token_a`,
     toUInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_b'), `event_attributes`), 'value')) AS `max_blocks_stale_token_b`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_denom'), `event_attributes`), 'value') AS `token_0_denom`,

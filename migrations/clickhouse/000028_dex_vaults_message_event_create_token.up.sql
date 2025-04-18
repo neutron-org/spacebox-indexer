@@ -98,6 +98,20 @@ ARRAY JOIN (
                                     msg_create_denom_event_attributes
                                 ),
                                 'value'
+                            ) AND
+                            -- matches create_denom event denom
+                            JSONExtractString(
+                                arrayFirst(
+                                    (attr) -> JSONExtractString(attr, 'key') = 'new_token_denom',
+                                    msg_event_attributes
+                                ),
+                                'value'
+                            ) = JSONExtractString(
+                                arrayFirst(
+                                    (attr) -> JSONExtractString(attr, 'key') = 'new_token_denom',
+                                    msg_create_denom_event_attributes
+                                ),
+                                'value'
                             )
                         ),
                         arrayMap(

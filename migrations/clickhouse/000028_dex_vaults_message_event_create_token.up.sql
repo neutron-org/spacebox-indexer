@@ -47,9 +47,7 @@ WITH
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
     event_tuple.2 as `event_type`,
-    event_tuple.3 as `event_attributes`,
-    event_tuple.4 as `msg_create_denom_event_attributes`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'creator'), `msg_create_denom_event_attributes`), 'value') AS `create_denom_contract_address`
+    event_tuple.3 as `event_attributes`
 SELECT
     `timestamp`,
     `height`,
@@ -74,20 +72,33 @@ ARRAY JOIN (
                         -- event_tuple.2: event_type
                         JSONExtractString(msg_event, 'type'),
                         -- event_tuple.3: event_attributes
-                        msg_event_attributes,
-                        -- event_tuple.4: related create_denom
-                        msg_create_denom_event_attributes
+                        msg_event_attributes
                     ),
                     -- filter to only successful execution events
                     arrayFilter(
                         (msg_event_attributes) -> (
+                            -- is action="create_token_reply_success"
                             JSONExtractString(
                                 arrayFirst(
                                     (attr) -> JSONExtractString(attr, 'key') = 'action',
                                     msg_event_attributes
                                 ),
                                 'value'
-                            ) = 'create_token_reply_success'
+                            ) = 'create_token_reply_success' AND
+                            -- matches create_denom event contract address
+                            JSONExtractString(
+                                arrayFirst(
+                                    (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
+                                    msg_event_attributes
+                                ),
+                                'value'
+                            ) = JSONExtractString(
+                                arrayFirst(
+                                    (attr) -> JSONExtractString(attr, 'key') = 'creator',
+                                    msg_create_denom_event_attributes
+                                ),
+                                'value'
+                            )
                         ),
                         arrayMap(
                             (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
@@ -113,4 +124,3 @@ ARRAY JOIN (
         )
     )
 ) AS `event_tuple`
-WHERE `create_denom_contract_address` = `contract`

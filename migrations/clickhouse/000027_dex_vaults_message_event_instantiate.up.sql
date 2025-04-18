@@ -84,8 +84,7 @@ WITH
     event_tuple.1 as `event_index`,
     event_tuple.2 as `event_type`,
     event_tuple.3 as `event_attributes`,
-    event_tuple.4 as `instantiate_event_attributes`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `instantiate_event_attributes`), 'value') AS `instantiate_contract_address`
+    event_tuple.4 as `instantiate_event_attributes`
 SELECT
     `timestamp`,
     `height`,
@@ -137,13 +136,28 @@ ARRAY JOIN (
                     -- filter to only possible supervault instantiate events
                     arrayFilter(
                         (msg_event_attributes) -> (
+                            -- is action="instantiate IMM"
                             JSONExtractString(
                                 arrayFirst(
                                     (attr) -> JSONExtractString(attr, 'key') = 'action',
                                     msg_event_attributes
                                 ),
                                 'value'
-                            ) = 'instantiate IMM'
+                            ) = 'instantiate IMM' AND
+                            -- matches instantiate event contract address
+                            JSONExtractString(
+                                arrayFirst(
+                                    (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
+                                    msg_event_attributes
+                                ),
+                                'value'
+                            ) = JSONExtractString(
+                                arrayFirst(
+                                    (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
+                                    msg_instantiate_event_attributes
+                                ),
+                                'value'
+                            )
                         ),
                         arrayMap(
                             (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
@@ -169,4 +183,4 @@ ARRAY JOIN (
         )
     )
 ) AS `event_tuple`
-WHERE `code_id` > 0 AND `instantiate_contract_address` = `contract`
+WHERE `code_id` > 0

@@ -56,8 +56,6 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_message_event_instantiate_writer TO
     `block_part_index`          Int8,
     `tx_index`                  Int32,
     `event_index`               Int32,
-    -- related event data
-    `code_id`                   UInt64,
     -- event data
     `type`                      LowCardinality(String),
     `action`                    LowCardinality(String),
@@ -83,16 +81,13 @@ WITH
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
     event_tuple.2 as `event_type`,
-    event_tuple.3 as `event_attributes`,
-    event_tuple.4 as `instantiate_event_attributes`
+    event_tuple.3 as `event_attributes`
 SELECT
     `timestamp`,
     `height`,
     `block_part_index`,
     `tx_index`,
     `event_index`,
-    -- add instantiate event attributes
-    toUInt64OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'code_id'), `instantiate_event_attributes`), 'value')) AS `code_id`,
     -- add wasm event attributes
     `event_type` as `type`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
@@ -160,7 +155,17 @@ ARRAY JOIN (
                                     msg_instantiate_event_attributes
                                 ),
                                 'value'
-                            )
+                            ) AND
+                            -- instantiate event code_id is greater than 0
+                            toUInt64OrZero(
+                                JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'code_id',
+                                        msg_instantiate_event_attributes
+                                    ),
+                                    'value'
+                                )
+                            ) > 0
                         ),
                         arrayMap(
                             (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
@@ -186,4 +191,3 @@ ARRAY JOIN (
         )
     )
 ) AS `event_tuple`
-WHERE `code_id` > 0

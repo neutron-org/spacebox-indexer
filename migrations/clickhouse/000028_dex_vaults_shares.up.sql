@@ -92,18 +92,30 @@ ARRAY JOIN (
                                 )
                             ) > 0 AND
                             -- matches tf_mint event contract address
-                            JSONExtractString(
-                                arrayFirst(
-                                    (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
-                                    msg_event_attributes
-                                ),
-                                'value'
-                            ) = JSONExtractString(
-                                arrayFirst(
-                                    (attr) -> JSONExtractString(attr, 'key') = 'mint_to_address',
-                                    msg_tf_mint_event_attributes
-                                ),
-                                'value'
+                            has(
+                                [
+                                    JSONExtractString(
+                                        arrayFirst(
+                                            (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
+                                            msg_event_attributes
+                                        ),
+                                        'value'
+                                    ),
+                                    JSONExtractString(
+                                        arrayFirst(
+                                            (attr) -> JSONExtractString(attr, 'key') = 'from',
+                                            msg_event_attributes
+                                        ),
+                                        'value'
+                                    )
+                                ],
+                                JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'mint_to_address',
+                                        msg_tf_mint_event_attributes
+                                    ),
+                                    'value'
+                                )
                             ) AND
                             -- matches tf_mint event amount
                             JSONExtractString(

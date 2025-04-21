@@ -1,7 +1,7 @@
 
--- spacebox.dex_vault_shares table
+-- spacebox.dex_vaults_shares table
 
-CREATE TABLE spacebox.dex_vault_shares
+CREATE TABLE spacebox.dex_vaults_shares
 (
     `timestamp`         DateTime,
     `height`            Int64,
@@ -28,9 +28,9 @@ ENGINE = ReplacingMergeTree()
 ORDER BY `sort_key`
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_vault_shares_deposit_writer source
+-- spacebox.dex_vaults_shares_deposit_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_vault_shares_deposit_writer TO spacebox.dex_vault_shares (
+CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_deposit_writer TO spacebox.dex_vaults_shares (
     `timestamp`         DateTime,
     `height`            Int64,
     `block_part_index`  Int8,
@@ -161,9 +161,9 @@ ARRAY JOIN (
 ) AS `event_tuple`;
 
 
--- spacebox.dex_vault_shares_withdrawal_writer source
+-- spacebox.dex_vaults_shares_withdrawal_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_vault_shares_withdrawal_writer TO spacebox.dex_vault_shares (
+CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_withdrawal_writer TO spacebox.dex_vaults_shares (
     `timestamp`         DateTime,
     `height`            Int64,
     `block_part_index`  Int8,

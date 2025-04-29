@@ -28,6 +28,8 @@ CREATE TABLE spacebox.dex_message_event_tick_update
     `SwapAmountOut`     UInt256,
     -- added to calculate SwapAmountIn/Out for DEX v<=5 events
     `is_swap`           Boolean,
+    `is_estimated_swap` Boolean,
+    `version`           UInt8 DEFAULT 1,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for token pair specific queries
@@ -35,7 +37,7 @@ CREATE TABLE spacebox.dex_message_event_tick_update
     -- add index for tranche queries
     INDEX `tranche_key_index` (`TrancheKey`) TYPE bloom_filter(0.01))
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
-ENGINE = ReplacingMergeTree()
+ENGINE = ReplacingMergeTree(`version`)
 ORDER BY (
     -- the minimum unique parts needed to describe a unique TickUpdate position
     `height`,
@@ -67,7 +69,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
     `SwapAmountIn`      UInt256,
     `SwapAmountOut`     UInt256,
     -- added to calculate SwapAmountIn/Out for DEX v<=5 events
-    `is_swap`           Boolean
+    `is_swap`           Boolean,
+    `is_estimated_swap` Boolean
 ) AS
     WITH
         -- define DEX address constant
@@ -104,7 +107,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
         toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
         toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
         -- add computed `is_swap` field for DEX v1-5 swap-volume fix
-        if (SwapAmountIn > 0, 1, `calculated_is_swap`) as `is_swap`
+        if (`SwapAmountIn` > 0, 1, `calculated_is_swap`) as `is_swap`,
+        if (`SwapAmountIn` > 0, 0, `calculated_is_swap`) as `is_estimated_swap`
     FROM spacebox.dex_message_event
     ARRAY JOIN (
         -- Extract "message part" events with tx_index

@@ -271,3 +271,58 @@ ARRAY JOIN
         JSONExtractArrayRaw(message, 'prices')
     ) as price_tuple
     WHERE height > 0
+
+-- spacebox.raw_dex_pool_metadata_topic definition
+
+CREATE TABLE spacebox.raw_dex_pool_metadata_topic
+(
+    `message` String
+)
+    ENGINE = Kafka
+        SETTINGS kafka_broker_list = 'kafka:9093',
+            kafka_topic_list = 'raw_dex_pool_metadata',
+            kafka_group_name = 'spacebox',
+            kafka_format = 'JSONAsString';
+
+-- spacebox.raw_dex_pool_metadata definition
+
+CREATE TABLE spacebox.raw_dex_pool_metadata
+(
+    -- add pair_id for optimized queries
+    `pair_id`			LowCardinality(String)
+                        MATERIALIZED concat(`token0`, '<>', `token1`),
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `id`                UInt64,
+    `tick`              Int64,
+    `fee`               UInt64,
+    `token0`            LowCardinality(String),
+    `token1`            LowCardinality(String),
+    -- add reverse lookup index
+    INDEX `tick_fee_index` (`token0`, `token1`, `tick`, `fee`) TYPE set(0)
+)
+    ENGINE = ReplacingMergeTree
+        ORDER BY (`id`)
+    SETTINGS index_granularity = 8192;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS raw_dex_pool_metadata_consumer TO spacebox.raw_dex_pool_metadata AS
+SELECT
+    parseDateTimeBestEffortOrZero(JSONExtractString(message, 'timestamp'))  AS `timestamp`,
+    toInt64OrZero(JSONExtractString(message, 'height'))                     AS `height`,
+    toUInt64OrZero(pool_metadata_tuple.1)                                   AS `id`,
+    toInt64OrZero(pool_metadata_tuple.2)                                    AS `tick`,
+    toUInt64OrZero(pool_metadata_tuple.3)                                   AS `fee`,
+    pool_metadata_tuple.4                                                   AS `token0`,
+    pool_metadata_tuple.5                                                   AS `token1`
+FROM spacebox.raw_dex_pool_metadata_topic
+ARRAY JOIN
+    arrayMap(
+        (pool_metadata) -> (
+            JSONExtractString(pool_metadata, 'id'),
+            JSONExtractString(pool_metadata, 'tick'),
+            JSONExtractString(pool_metadata, 'fee'),
+            JSONExtractString(pool_metadata, 'pair_id', 'token0'),
+            JSONExtractString(pool_metadata, 'pair_id', 'token1')
+        ),
+        JSONExtractArrayRaw(message, 'pool_metadata')
+    ) as pool_metadata_tuple

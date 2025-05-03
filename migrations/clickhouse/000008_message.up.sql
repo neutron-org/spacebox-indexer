@@ -13,12 +13,11 @@ CREATE TABLE spacebox.message
     `message` String
 )
 ENGINE = ReplacingMergeTree
-ORDER BY (timestamp,
+ORDER BY (
  height,
  txhash,
- message_index,
- type,
- signer)
+ message_index
+)
 SETTINGS index_granularity = 8192;
 
 -- spacebox.message_writer source

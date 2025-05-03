@@ -25,8 +25,7 @@ CREATE TABLE spacebox.raw_block
     `signatures`       String
 )
     ENGINE = ReplacingMergeTree
-        ORDER BY (height,
-                  timestamp)
+        ORDER BY (height)
         SETTINGS index_granularity = 8192;
 
 
@@ -51,7 +50,7 @@ CREATE TABLE spacebox.raw_block_txhash
     `timestamp`        DATETIME
 )
     ENGINE = ReplacingMergeTree
-        ORDER BY (height, tx_index, timestamp)
+        ORDER BY (height, tx_index)
         SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS raw_block_txhash_consumer TO spacebox.raw_block_txhash AS
@@ -143,7 +142,7 @@ CREATE TABLE spacebox.raw_transaction
     `signer`     String
 )
     ENGINE = ReplacingMergeTree
-        ORDER BY (timestamp,
+        ORDER BY (
                   height,
                   txhash,
                   signer,

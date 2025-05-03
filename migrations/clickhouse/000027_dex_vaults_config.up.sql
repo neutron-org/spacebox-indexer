@@ -17,7 +17,6 @@ CREATE TABLE spacebox.dex_vaults_config_tx_event
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
 ORDER BY (
-    `timestamp`,
     `height`,
     `txhash`,
     `event_index`

@@ -1,12 +1,17 @@
 CREATE TABLE spacebox.txs_events
 (
     `height` Int64,
+    `txhash` String,
+    `event_index` Int16,
     `type` String,
     `attributes` String
 )
-ENGINE = MergeTree
-ORDER BY (height,
- type)
+ENGINE = ReplacingMergeTree
+ORDER BY (
+ height,
+ txhash,
+ event_index
+)
 SETTINGS index_granularity = 8192;
 
 -- spacebox.txs_events_writer source
@@ -14,19 +19,21 @@ SETTINGS index_granularity = 8192;
 CREATE MATERIALIZED VIEW spacebox.txs_events_writer TO spacebox.txs_events
 (
     `height` Int64,
+    `txhash` String,
+    `event_index` Int16,
     `type` String,
     `attributes` String
 ) AS
 SELECT
     `height`,
+    `txhash`,
+    `event_index`,
     JSONExtractString(`event`, 'type') AS `type`,
     JSONExtractString(`event`, 'attributes') AS `attributes`
 FROM
     spacebox.raw_transaction
-    ARRAY JOIN (
-        JSONExtractArrayRaw(`events`)
-    ) as `event`
-;
+ARRAY JOIN (JSONExtractArrayRaw(`events`)) as `event`,
+    arrayEnumerate(JSONExtractArrayRaw(`events`)) as `event_index`;
 
 -- spacebox.wasm_txs_events definition
 
@@ -35,18 +42,18 @@ CREATE TABLE spacebox.wasm_txs_events
     `timestamp` DateTime,
     `height` Int64,
     `txhash` String,
+    `event_index` Int16,
     `signer` String,
     `contract_address` String,
     `action` String,
     `attributes` String
 )
-ENGINE = MergeTree
+ENGINE = ReplacingMergeTree
 ORDER BY (timestamp,
  height,
  txhash,
- signer,
- contract_address,
- action)
+ event_index
+)
 SETTINGS index_granularity = 8192;
 
 -- spacebox.wasm_txs_events_writer source
@@ -57,6 +64,7 @@ CREATE MATERIALIZED VIEW spacebox.wasm_txs_events_writer TO spacebox.wasm_txs_ev
     `timestamp` DateTime,
     `height` Int64,
     `txhash` String,
+    `event_index` Int16,
     `signer` String,
     `contract_address` String,
     `action` String,
@@ -66,6 +74,7 @@ SELECT
     `timestamp`,
     `height`,
     `txhash`,
+    `event_index`
     `signer`,
     JSONExtractString(
         arrayFirst(
@@ -84,7 +93,6 @@ SELECT
     JSONExtractString(`event`, 'attributes') as `attributes`
 FROM
     spacebox.raw_transaction
-    ARRAY JOIN (
-        JSONExtractArrayRaw(`events`)
-    ) as `event`
+ARRAY JOIN (JSONExtractArrayRaw(`events`)) as `event`
+    arrayEnumerate(JSONExtractArrayRaw(`events`)) as `event_index`
 WHERE JSONExtractString(`event`, 'type') = 'wasm';

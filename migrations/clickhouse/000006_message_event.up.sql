@@ -44,7 +44,7 @@ WITH
     tx_result_tuple.4 as `msg_events_index_offset`,
     tx_result_tuple.5 as `msg_events`
 SELECT
-    `timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
     `height`,
     -- BeginBlock is 1, txs is 2, EndBlock/Other is 3
     2 as `block_part_index`,
@@ -180,7 +180,7 @@ WITH
     block_event_tuple.2 as `msg_events_index_offset`,
     block_event_tuple.3 as `msg_events`
 SELECT
-    `timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
     `height`,
     -- BeginBlock is 1, txs is 2, EndBlock/Other is 3
     if(`is_begin_block`, 1, 3) as `block_part_index`,

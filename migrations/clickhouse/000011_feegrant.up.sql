@@ -18,7 +18,7 @@ SETTINGS index_granularity = 8192;
 -- DO NEED DENOM AND AMOUNT ?
 CREATE MATERIALIZED VIEW spacebox.feegrant_msg_allowance_writer TO spacebox.feegrant_msg_allowance AS
 SELECT
-	timestamp,
+    toDateTime(`timestamp`) as `timestamp`,
     height,
     txhash,
     JSONExtractString(message, 'granter') as granter,

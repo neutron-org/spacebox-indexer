@@ -19,7 +19,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.interchainqueries_writer TO spacebox.interchainqueries AS
 select
-	`timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
 	height,
 	txhash,
 	JSONExtractString(arrayFilter( x -> JSONExtractString(x, 'key') = 'action',attributes)[1], 'value') as action,

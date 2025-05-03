@@ -16,7 +16,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.admin_module_writer TO spacebox.admin_module AS
 select
-	`timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
 	height,
 	txhash,
 	JSONExtractString(s, 'stargate', 'type_url') as type,

@@ -17,7 +17,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.feerefunder_lock_fees_writer TO spacebox.feerefunder_lock_fees AS
 select
-	`timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
 	height,
 	txhash,
 	JSONExtractString(arrayFilter( x -> JSONExtractString(x, 'key') = 'channel_id',attributes)[1], 'value') as channel_id,
@@ -57,7 +57,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.feerefunder_distribute_ack_fee_writer TO spacebox.feerefunder_distribute_ack_fee AS
 select
-	`timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
 	height,
 	txhash,
 	JSONExtractString(arrayFilter( x -> JSONExtractString(x, 'key') = 'channel_id',attributes)[1], 'value') as channel_id,
@@ -95,7 +95,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.feerefunder_distribute_timeout_fee_writer TO spacebox.feerefunder_distribute_timeout_fee AS
 select
-	`timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
 	height,
 	txhash,
 	JSONExtractString(arrayFilter( x -> JSONExtractString(x, 'key') = 'channel_id',attributes)[1], 'value') as channel_id,

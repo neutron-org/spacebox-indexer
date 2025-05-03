@@ -17,7 +17,8 @@ SETTINGS index_granularity = 8192;
 
 
 CREATE MATERIALIZED VIEW spacebox.authz_msg_grant_writer TO spacebox.authz_msg_grant AS
-SELECT timestamp,
+SELECT
+    toDateTime(`timestamp`) as `timestamp`,
     height,
     txhash,
     JSONExtractString(message, 'granter') as granter,
@@ -62,7 +63,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.authz_msg_revoke_writer TO spacebox.authz_msg_revoke AS
 SELECT
-	timestamp,
+	toDateTime(`timestamp`) as `timestamp`,
     height,
     txhash,
     JSONExtractString(message, 'granter') as granter,

@@ -14,7 +14,7 @@ SETTINGS index_granularity = 8192;
 CREATE MATERIALIZED VIEW spacebox.liveness_writer TO spacebox.liveness AS
 SELECT
 	height,
-	`timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
 	JSONExtractString(
 		arrayFilter(
 			x -> JSONExtractString(x, 'key') = 'address',

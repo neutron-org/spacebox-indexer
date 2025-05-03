@@ -29,7 +29,7 @@ CREATE MATERIALIZED VIEW spacebox.txs_events_writer TO spacebox.txs_events
     `attributes` String
 ) AS
 SELECT
-    `timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
     `height`,
     `txhash`,
     `event_index`,

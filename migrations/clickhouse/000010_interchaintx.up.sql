@@ -15,7 +15,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.interchain_account_writer TO spacebox.interchain_account AS
 select
-	`timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
 	height,
 	txhash,
 	JSONExtractString(message, 'owner') as owner,

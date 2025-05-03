@@ -22,7 +22,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.ibc_msg_transfer_writer TO spacebox.ibc_msg_transfer AS
 SELECT
-	timestamp,
+    toDateTime(`timestamp`) as `timestamp`,
     height,
     txhash,
     JSONExtractString(message, 'sourcePort') as source_port,
@@ -75,7 +75,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.ibc_msg_acknowledgement_writer TO spacebox.ibc_msg_acknowledgement AS
 SELECT
-	timestamp,
+    toDateTime(`timestamp`) as `timestamp`,
     height,
     txhash,
     JSONExtractString(message, 'packet', 'sourcePort') as source_port,
@@ -128,7 +128,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.ibc_msg_recv_packet_writer TO spacebox.ibc_msg_recv_packet AS
 SELECT
-	timestamp,
+    toDateTime(`timestamp`) as `timestamp`,
     height,
     txhash,
     JSONExtractString(message, 'packet', 'sourcePort') as source_port,

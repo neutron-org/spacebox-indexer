@@ -36,7 +36,7 @@ SELECT *
 FROM
 (
     SELECT
-        timestamp,
+        toDateTime(`timestamp`) as `timestamp`,
         height,
         txhash,
         arrayJoin(

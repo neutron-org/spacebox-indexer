@@ -53,7 +53,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
         event_tuple.4 as `event_coins`,
         event_tuple.5 as `event_coins_index`
     SELECT
-        `timestamp`,
+        toDateTime(`timestamp`) as `timestamp`,
         `height`,
         `block_part_index`,
         `tx_index`,

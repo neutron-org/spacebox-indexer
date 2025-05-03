@@ -18,7 +18,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.sdk_auction_writer TO spacebox.sdk_auction AS
 select
-	`timestamp`,
+    toDateTime(`timestamp`) as `timestamp`,
 	height,
 	txhash,
 	JSONExtractString(message, 'bidder') as bidder,

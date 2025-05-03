@@ -11,7 +11,7 @@ CREATE MATERIALIZED VIEW spacebox.account_writer TO spacebox.account AS
 SELECT
      arrayJoin(extractAll(logs, 'neutron[a-z0-9]{38}')) AS address,
      height,
-     timestamp
+     toDateTime(`timestamp`) as `timestamp`
 FROM
      spacebox.raw_transaction
 WHERE

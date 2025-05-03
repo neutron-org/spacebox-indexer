@@ -1,8 +1,10 @@
 CREATE TABLE spacebox.txs_events
 (
+    `timestamp` DateTime,
     `height` Int64,
     `txhash` String,
     `event_index` Int16,
+    `signer` String,
     `type` String,
     `attributes` String
 )
@@ -18,16 +20,20 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.txs_events_writer TO spacebox.txs_events
 (
+    `timestamp` DateTime,
     `height` Int64,
     `txhash` String,
     `event_index` Int16,
+    `signer` String,
     `type` String,
     `attributes` String
 ) AS
 SELECT
+    `timestamp`,
     `height`,
     `txhash`,
     `event_index`,
+    `signer`,
     JSONExtractString(`event`, 'type') AS `type`,
     JSONExtractString(`event`, 'attributes') AS `attributes`
 FROM
@@ -49,7 +55,7 @@ CREATE TABLE spacebox.wasm_txs_events
     `attributes` String
 )
 ENGINE = ReplacingMergeTree
-ORDER BY (timestamp,
+ORDER BY (
  height,
  txhash,
  event_index
@@ -90,9 +96,7 @@ SELECT
         ),
         'value'
     ) AS action,
-    JSONExtractString(`event`, 'attributes') as `attributes`
+    `attributes`
 FROM
-    spacebox.raw_transaction
-ARRAY JOIN (JSONExtractArrayRaw(`events`)) as `event`
-    arrayEnumerate(JSONExtractArrayRaw(`events`)) as `event_index`
-WHERE JSONExtractString(`event`, 'type') = 'wasm';
+    spacebox.txs_events
+WHERE JSONExtractString(`type`) = 'wasm';

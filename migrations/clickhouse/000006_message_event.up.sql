@@ -61,37 +61,50 @@ FROM
             arrayMap(
                 (tx_result, tx_result_index) -> arrayMap(
                     (tx_result_events) -> arrayMap(
-                        (tx_result_events__msg_indexes) -> arrayFold(
-                            (acc, tx_result_event, tx_result_event__msg_indexes) -> (
+                        (tx_result_events__msg_indexes) -> arrayMap(
+                            (tx_result_tuple) -> (
+                                tx_result_tuple.1,
+                                tx_result_tuple.2,
+                                tx_result_tuple.3,
+                                tx_result_tuple.4,
+                                -- use start/length indexes to get message parts
+                                arraySlice(
+                                    tx_result_events,
+                                    tx_result_tuple.4 + 1,
+                                    tx_result_tuple.5
+                                )
+                            ),
+                            arrayFold(
+                            (acc, event_index, tx_result_event__msg_indexes) -> (
                                 if (
                                     acc[-1].3 = tx_result_event__msg_indexes,
-                                    -- Append event to the last group of events
+                                    -- Skip event
+                                    acc,
+                                    -- Otherwise, create a new group
                                     arrayConcat(
                                         arrayPopBack(acc),
+                                        -- edit previous group (end offset)
                                         [(
                                             acc[-1].1,
                                             acc[-1].2,
                                             acc[-1].3,
                                             acc[-1].4,
-                                            arrayConcat(acc[-1].5, [tx_result_event])
-                                        )]
-                                    ),
-                                    -- Otherwise, create a new group
-                                    arrayConcat(
-                                        acc,
+                                            toUInt32(event_index - acc[-1].4)
+                                        )],
+                                        -- add new group
                                         [(
                                             tx_result_index,
                                             toInt16(acc[-1].2 + 1),
                                             tx_result_event__msg_indexes,
-                                            toInt32(acc[-1].4 + if(empty(acc[-1].3), 0, length(acc[-1].5))),
-                                            [tx_result_event]
+                                            event_index,
+                                            toUInt32(length(tx_result_events) - event_index)
                                         )]
                                     )
                                 )
                             ),
                             -- fold (reduce) over subsequent message events
-                            -- - tx_result_event "field" tx_result_event
-                            arrayPopFront(tx_result_events),
+                            -- - get zero-based index
+                            arrayEnumerate(arrayPopFront(tx_result_events)),
                             -- - tx_result_event "field" tx_result_event__msg_indexes
                             arrayPopFront(tx_result_events__msg_indexes),
                             -- create arrayFold initial value from first event
@@ -102,11 +115,12 @@ FROM
                                 toInt16(0),
                                 -- tx_result_tuple.3: msg_indexes
                                 tx_result_events__msg_indexes[1],
-                                -- tx_result_tuple.4: msg_events_index_offset
-                                toInt32(0),
-                                -- tx_result_tuple.5: msg_events
-                                [tx_result_events[1]]
+                                -- tx_result_tuple.4: msg_events_index_offset_start
+                                toUInt32(0),
+                                -- tx_result_tuple.5: msg_events_index_offset_end
+                                toUInt32(length(tx_result_events))
                             )]
+                            )
                         ),
                         -- precompute tx_result "fields" as arrayMap lambda arguments
                         -- - tx_result "field" tx_result_events__msg_indexes
@@ -140,12 +154,10 @@ FROM
         )
     ) AS `tx_result_tuple`
 SETTINGS
-    -- split query execution into small chunks to reduce peak memory usage
-    max_block_size = 50,
-    -- do not wait for acknowledgement of insert (it should be fine):
-    -- it was found that some rows of data can take more than 60s to transform
-    async_insert = 1,
-    wait_for_async_insert = 0;
+    -- split query execution into small chunks to reduce peak memory usage (~max 400MB each row)
+    -- timed row query to be about 320ms for 500 msg parts or 280ms for 1 msg part of 4000 events
+    max_block_size = 100
+    max_execution_time = 120;
 
 -- spacebox.message_event_block_writer source
 
@@ -185,44 +197,56 @@ FROM
         arrayFlatten(
             arrayMap(
                 (block_events) -> arrayMap(
-                    (block_events__is_begin_block) -> arrayFold(
-                        (acc, block_event, block_event__is_begin_block) -> (
+                    (block_events__is_begin_block) -> arrayMap(
+                        (block_event_tuple) -> (
+                            block_event_tuple.1,
+                            block_event_tuple.2,
+                            -- use start/length indexes to get message parts
+                            arraySlice(
+                                block_events,
+                                block_event_tuple.2 + 1,
+                                block_event_tuple.3
+                            )
+                        ),
+                        arrayFold(
+                        (acc, event_index, block_event__is_begin_block) -> (
                             if (
                                 acc[-1].1 = block_event__is_begin_block,
-                                -- Append event to the last group of events
+                                -- Skip event
+                                acc,
+                                -- Otherwise, create a new group
                                 arrayConcat(
                                     arrayPopBack(acc),
+                                    -- edit previous group (end offset)
                                     [(
                                         acc[-1].1,
                                         acc[-1].2,
-                                        arrayConcat(acc[-1].3, [block_event])
-                                    )]
-                                ),
-                                -- Otherwise, create a new group
-                                arrayConcat(
-                                    acc,
+                                        toUInt32(event_index - acc[-1].2)
+                                    )],
+                                    -- add new group
                                     [(
                                         block_event__is_begin_block,
-                                        toInt32(acc[-1].2 + length(acc[-1].3)),
-                                        [block_event]
+                                        event_index,
+                                        toUInt32(length(block_events) - event_index)
                                     )]
                                 )
                             )
                         ),
                         -- fold (reduce) over subsequent message events
-                        -- - block_event "field" block_event
-                        arrayPopFront(block_events),
+                        -- - get zero-based index
+                        arrayEnumerate(arrayPopFront(block_events)),
                         -- - block_event "field" block_event__is_begin_block
                         arrayPopFront(block_events__is_begin_block),
                         -- create arrayFold initial value from first event
                         [(
                             -- block_event_tuple.1: is_begin_block
                             block_events__is_begin_block[1],
-                            -- block_event_tuple.2: msg_events_index_offset
-                            toInt32(0),
-                            -- block_event_tuple.3: msg_events
-                            [block_events[1]]
+                            -- block_event_tuple.2: msg_events_index_offset_start
+                            toUInt32(0),
+                            -- block_event_tuple.3: msg_events_index_offset_end
+                            toUInt32(length(block_events))
                         )]
+                        )
                     ),
                     -- precompute block_events "fields" as arrayMap lambda arguments
                     -- - block_events "field" block_events__is_begin_block
@@ -246,9 +270,7 @@ FROM
         )
     ) AS `block_event_tuple`
 SETTINGS
-    -- split query execution into small chunks to reduce peak memory usage
-    max_block_size = 50,
-    -- do not wait for acknowledgement of insert (it should be fine):
-    -- it was found that some rows of data can take more than 60s to transform
-    async_insert = 1,
-    wait_for_async_insert = 0;
+    -- split query execution into small chunks to reduce peak memory usage (~max 400MB each row)
+    -- timed row query to be about 320ms for 500 msg parts or 280ms for 1 msg part of 4000 events
+    max_block_size = 100
+    max_execution_time = 120;

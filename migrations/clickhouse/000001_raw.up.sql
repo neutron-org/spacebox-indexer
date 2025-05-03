@@ -3,7 +3,6 @@
 
 CREATE TABLE spacebox.raw_block_topic
 (
-
     `message` String
 )
     ENGINE = Kafka
@@ -21,7 +20,7 @@ CREATE TABLE spacebox.raw_block
     `num_txs`          Int64,
     `total_gas`        Int64,
     `proposer_address` String,
-    `timestamp`        DATETIME,
+    `timestamp`        DateTime64(9),
     `signatures`       String
 )
     ENGINE = ReplacingMergeTree
@@ -35,7 +34,7 @@ SELECT JSONExtractInt(message, 'block', 'header', 'height')                     
        JSONExtractInt(message, 'num_txs')                                                   AS num_txs,
        JSONExtractInt(message, 'total_gas')                                                 AS total_gas,
        JSONExtractString(message, 'proposer_address')                                       AS proposer_address,
-       parseDateTimeBestEffortOrZero(JSONExtractString(message, 'block', 'header', 'time')) AS timestamp,
+       parseDateTime64BestEffortOrZero(JSONExtractString(message, 'block', 'header', 'time')) AS timestamp,
        JSONExtractString(message, 'block', 'last_commit', 'signatures')                     AS signatures
 FROM spacebox.raw_block_topic
 GROUP BY height, hash, num_txs, total_gas, proposer_address, timestamp, signatures;
@@ -47,7 +46,7 @@ CREATE TABLE spacebox.raw_block_txhash
     `height`           Int64,
     `tx_index`         Int32,
     `txhash`           String,
-    `timestamp`        DATETIME
+    `timestamp`        DateTime64(9)
 )
     ENGINE = ReplacingMergeTree
         ORDER BY (height, tx_index)
@@ -57,7 +56,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS raw_block_txhash_consumer TO spacebox.raw
 SELECT JSONExtractInt(message, 'block', 'header', 'height')                                 AS height,
        tx_index,
        txhash,
-       parseDateTimeBestEffortOrZero(JSONExtractString(message, 'block', 'header', 'time')) AS timestamp
+       parseDateTime64BestEffortOrZero(JSONExtractString(message, 'block', 'header', 'time')) AS timestamp
 FROM spacebox.raw_block_topic
 --  get tx hashes in the correct block order
 ARRAY JOIN
@@ -72,7 +71,6 @@ GROUP BY height, tx_index, txhash, timestamp;
 
 CREATE TABLE spacebox.raw_block_results_topic
 (
-
     `message` String
 )
     ENGINE = Kafka
@@ -86,13 +84,12 @@ CREATE TABLE spacebox.raw_block_results_topic
 
 CREATE TABLE spacebox.raw_block_results
 (
-
     `height`                  Int64,
     `txs_results`             String,
     `finalize_block_events`   String,
     `validator_updates`       String,
     `consensus_param_updates` String,
-    `timestamp`               DATETIME
+    `timestamp`               DateTime64(9)
 )
     ENGINE = ReplacingMergeTree
         ORDER BY height
@@ -118,7 +115,7 @@ SELECT JSONExtractInt(message, 'height')                                      AS
        JSONExtractString(message, 'finalize_block_events')                    AS finalize_block_events,
        JSONExtractString(message, 'validator_updates')                        AS validator_updates,
        JSONExtractString(message, 'consensus_param_updates')                  AS consensus_param_updates,
-       parseDateTimeBestEffortOrZero(JSONExtractString(message, 'timestamp')) AS timestamp
+       parseDateTime64BestEffortOrZero(JSONExtractString(message, 'timestamp')) AS timestamp
 FROM spacebox.raw_block_results_topic
 GROUP BY height, txs_results, finalize_block_events, validator_updates, consensus_param_updates,
          timestamp;
@@ -127,7 +124,7 @@ GROUP BY height, txs_results, finalize_block_events, validator_updates, consensu
 
 CREATE TABLE spacebox.raw_transaction
 (
-    `timestamp`  DATETIME,
+    `timestamp`  DateTime64(9),
     `height`     Int64,
     `txhash`     String,
     `codespace`  String,
@@ -151,7 +148,7 @@ CREATE TABLE spacebox.raw_transaction
 
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS raw_transaction_consumer TO spacebox.raw_transaction AS
-SELECT parseDateTimeBestEffortOrZero(JSONExtractString(message, 'tx_response', 'timestamp')) AS timestamp,
+SELECT parseDateTime64BestEffortOrZero(JSONExtractString(message, 'tx_response', 'timestamp')) AS timestamp,
        JSONExtractInt(message, 'tx_response', 'height')                                      AS height,
        JSONExtractString(message, 'tx_response', 'txhash')                                   AS txhash,
        JSONExtractString(message, 'tx_response', 'codespace')                                AS codespace,
@@ -171,7 +168,6 @@ GROUP BY timestamp, height, txhash, codespace, code, raw_log, logs, info, gas_wa
 
 CREATE TABLE spacebox.raw_genesis_topic
 (
-
     `message` String
 )
     ENGINE = Kafka('kafka:9093',
@@ -183,7 +179,7 @@ CREATE TABLE spacebox.raw_genesis_topic
 
 CREATE TABLE spacebox.raw_genesis
 (
-    `genesis_time`     DATETIME,
+    `genesis_time`     DateTime64(9),
     `chain_id`         String,
     `initial_height`   Int64,
     `consensus_params` String,
@@ -197,7 +193,7 @@ CREATE TABLE spacebox.raw_genesis
 
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS raw_genesis_consumer TO spacebox.raw_genesis AS
-SELECT parseDateTimeBestEffortOrZero(JSONExtractString(message, 'genesis_time')) AS genesis_time,
+SELECT parseDateTime64BestEffortOrZero(JSONExtractString(message, 'genesis_time')) AS genesis_time,
        JSONExtractString(message, 'chain_id')                                    AS chain_id,
        JSONExtractInt(message, 'initial_height')                                 AS initial_height,
        JSONExtractString(message, 'consensus_params')                            AS consensus_params,
@@ -225,7 +221,7 @@ CREATE TABLE spacebox.raw_slinky_prices
     -- add pair_id for optimized queries
     `pair_id`			LowCardinality(String)
                         MATERIALIZED concat(`base`, '-', `quote`),
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `id`                UInt16,
     `base`              LowCardinality(String),
@@ -242,7 +238,7 @@ CREATE TABLE spacebox.raw_slinky_prices
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS raw_slinky_prices_consumer TO spacebox.raw_slinky_prices AS
 SELECT
-    parseDateTimeBestEffortOrZero(price_tuple.1)    AS `timestamp`,
+    parseDateTime64BestEffortOrZero(price_tuple.1)  AS `timestamp`,
     toInt64OrZero(price_tuple.2)                    AS `height`,
     toInt16OrZero(price_tuple.3)                    AS `id`,
     price_tuple.4                                   AS `base`,
@@ -290,7 +286,7 @@ CREATE TABLE spacebox.raw_dex_pool_metadata
     -- add pair_id for optimized queries
     `pair_id`			LowCardinality(String)
                         MATERIALIZED concat(`token0`, '<>', `token1`),
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `id`                UInt64,
     `tick`              Int64,
@@ -306,7 +302,7 @@ CREATE TABLE spacebox.raw_dex_pool_metadata
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS raw_dex_pool_metadata_consumer TO spacebox.raw_dex_pool_metadata AS
 SELECT
-    parseDateTimeBestEffortOrZero(JSONExtractString(message, 'timestamp'))  AS `timestamp`,
+    parseDateTime64BestEffortOrZero(JSONExtractString(message, 'timestamp')) AS `timestamp`,
     toInt64OrZero(JSONExtractString(message, 'height'))                     AS `height`,
     toUInt64OrZero(pool_metadata_tuple.1)                                   AS `id`,
     toInt64OrZero(pool_metadata_tuple.2)                                    AS `tick`,

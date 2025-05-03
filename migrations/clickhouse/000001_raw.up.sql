@@ -265,7 +265,7 @@ ARRAY JOIN
         JSONExtractArrayRaw(message, 'mappings'),
         JSONExtractArrayRaw(message, 'prices')
     ) as price_tuple
-    WHERE height > 0
+    WHERE height > 0;
 
 -- spacebox.raw_dex_pool_metadata_topic definition
 
@@ -320,4 +320,4 @@ ARRAY JOIN
             JSONExtractString(pool_metadata, 'pair_id', 'token1')
         ),
         JSONExtractArrayRaw(message, 'pool_metadata')
-    ) as pool_metadata_tuple
+    ) as pool_metadata_tuple;

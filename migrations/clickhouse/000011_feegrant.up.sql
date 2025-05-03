@@ -39,6 +39,6 @@ from (
 	 'messages'))) AS message
 	    FROM spacebox.raw_transaction
     WHERE code = 0 and type = '/cosmos.feegrant.v1beta1.MsgGrantAllowance'
-);
+)
 
 -- RevokeAllowance - timeout

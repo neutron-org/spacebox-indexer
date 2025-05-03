@@ -18,7 +18,7 @@ SETTINGS index_granularity = 8192;
 -- can add known fixes here
 INSERT INTO spacebox.fixes (`id`, `description`) VALUES
 (1, 'swap-volume: TickUpdate event SwapAmountIn/SwapAmountOut attributes'),
-(2, 'dex pool-id: dex action=DepositLP/WithdrawLP event PoolId attribute')
+(2, 'dex pool-id: dex action=DepositLP/WithdrawLP event PoolId attribute');
 
 -- spacebox.fix_1_writer source
 
@@ -151,7 +151,7 @@ CREATE MATERIALIZED VIEW spacebox.fix_1_applier TO spacebox.dex_message_event_ti
     FROM fix
         LEFT JOIN swap_volume_fix ON 1=1
     WHERE `is_swap` = 1
-      AND `is_estimated_swap` = 1;
+      AND `is_estimated_swap` = 1
 SETTINGS
     -- do not wait for acknowledgement of insert (it should handle race conditions fine):
     -- on testnet this fix took 20s to apply

@@ -339,3 +339,66 @@ CREATE MATERIALIZED VIEW spacebox.dex_shares_withdrawal_writer TO spacebox.dex_s
 SETTINGS
     -- allow bigger blocks because transformation is easier
     max_block_size = 1000;
+
+-- update unknown DEX pool metadata using raw_dex_pool_metadata until data appears on the share events themselves
+
+CREATE MATERIALIZED VIEW spacebox.dex_shares_pool_id_writer TO spacebox.dex_shares (
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    -- event data
+    `action`            LowCardinality(String),
+    `Receiver`          String,
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TickIndex`         Int64,
+    `Fee`               UInt64,
+    `PoolId`            Int128,
+    `shares`            UInt128
+) AS
+    SELECT
+        shares.`timestamp` as `timestamp`,
+        shares.`height` as `height`,
+        shares.`block_part_index` as `block_part_index`,
+        shares.`tx_index` as `tx_index`,
+        shares.`event_index` as `event_index`,
+        shares.`action` as `action`,
+        shares.`Receiver` as `Receiver`,
+        shares.`TokenZero` as `TokenZero`,
+        shares.`TokenOne` as `TokenOne`,
+        shares.`TickIndex` as `TickIndex`,
+        shares.`Fee` as `Fee`,
+        metadata.`id` as `PoolId`,
+        shares.`shares` as `shares`
+    FROM spacebox.raw_dex_pool_metadata as metadata
+    -- only add if fix is not yet applied
+    INNER JOIN (
+        SELECT `applied`
+        FROM spacebox.fixes
+        WHERE `id` = 2
+        AND `applied` = 0
+    ) as fix ON 1=1
+    INNER JOIN (
+        -- need all fields to be able to overwrite these
+        SELECT
+            `timestamp`,
+            `height`,
+            `block_part_index`,
+            `tx_index`,
+            `event_index`,
+            `action`,
+            `Receiver`,
+            `TokenZero`,
+            `TokenOne`,
+            `TickIndex`,
+            `Fee`,
+            `shares`
+        FROM spacebox.dex_shares
+        WHERE `PoolId` = -1
+    ) as shares
+    ON metadata.`token0` = shares.`TokenZero`
+    AND metadata.`token1` = shares.`TokenOne`
+    AND metadata.`tick` = shares.`TickIndex`
+    AND metadata.`fee` = shares.`Fee`

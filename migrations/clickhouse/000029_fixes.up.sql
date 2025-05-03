@@ -17,7 +17,8 @@ SETTINGS index_granularity = 8192;
 
 -- can add known fixes here
 INSERT INTO spacebox.fixes (`id`, `description`) VALUES
-(1, 'swap-volume: TickUpdate event SwapAmountIn/SwapAmountOut attributes')
+(1, 'swap-volume: TickUpdate event SwapAmountIn/SwapAmountOut attributes'),
+(2, 'dex pool-id: dex action=DepositLP/WithdrawLP event PoolId attribute')
 
 -- spacebox.fix_1_writer source
 
@@ -156,3 +157,54 @@ SETTINGS
     -- on testnet this fix took 20s to apply
     async_insert = 1,
     wait_for_async_insert = 0;
+
+-- spacebox.fix_2_writer source
+
+CREATE MATERIALIZED VIEW spacebox.fix_2_trigger TO spacebox.fixes (
+    `id`                UInt16,
+    `description`       String,
+    `applied`           Boolean,
+    `height`            Int64
+) AS
+    SELECT
+        2 as `id`,
+        'dex pool-id: dex action=DepositLP/WithdrawLP event PoolID attribute' as `description`,
+        1 as `applied`,
+        `height`
+    FROM spacebox.message_event
+        -- only add if fix is not yet applied
+        INNER JOIN (
+            SELECT `applied`
+            FROM spacebox.fixes
+            WHERE `id` = 2
+              AND `applied` = 0
+        ) as fix ON 1=1
+    WHERE arrayExists(
+        (msg_event) -> (
+            JSONExtractString(msg_event, 'type') = 'message' AND
+            -- is a dex event
+            arrayExists(
+                (attr) -> (
+                    JSONExtractString(attr, 'key') = 'module' AND
+                    JSONExtractString(attr, 'value') = 'dex'
+                ),
+                JSONExtractArrayRaw(msg_event, 'attributes')
+            ) AND
+            -- is a deposit or withdrawal
+            arrayExists(
+                (attr) -> (
+                    JSONExtractString(attr, 'key') = 'action' AND
+                    JSONExtractString(attr, 'value') IN ('DepositLP', 'WithdrawLP')
+                ),
+                JSONExtractArrayRaw(msg_event, 'attributes')
+            ) AND
+            -- has a PoolID attribute
+            arrayExists(
+                (attr) -> JSONExtractString(attr, 'key') = 'PoolID',
+                JSONExtractArrayRaw(msg_event, 'attributes')
+            )
+        ),
+        `msg_events`
+    )
+    ORDER BY height ASC
+    LIMIT 1;

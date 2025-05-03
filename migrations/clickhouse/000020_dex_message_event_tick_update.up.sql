@@ -80,7 +80,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
         event_tuple.2 as `event_type`,
         event_tuple.3 as `event_attributes`,
         -- computed field
-        event_tuple.4 as `calculated_is_swap`
+        event_tuple.4 as `is_pre_v6_estimated_swap`
     SELECT
         `timestamp`,
         `height`,
@@ -107,8 +107,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
         toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
         toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
         -- add computed `is_swap` field for DEX v1-5 swap-volume fix
-        if (`SwapAmountIn` > 0, 1, `calculated_is_swap`) as `is_swap`,
-        if (`SwapAmountIn` > 0, 0, `calculated_is_swap`) as `is_estimated_swap`
+        if (`SwapAmountIn` > 0, 1, `is_pre_v6_estimated_swap`) as `is_swap`,
+        if (`SwapAmountIn` > 0, 0, `is_pre_v6_estimated_swap`)  as `is_estimated_swap`
     FROM spacebox.dex_message_event
     ARRAY JOIN (
         -- Extract "message part" events with tx_index
@@ -116,7 +116,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
             arrayMap(
                 (dex_msg_part_events) -> arrayMap(
                     (related_msg_dex_spent_event, related_msg_dex_received_event) -> arrayMap(
-                        (related_msg_dex_received_denom) -> arrayMap(
+                        (related_msg_dex_received_denom, is_v6) -> arrayMap(
                             (msg_part_event, msg_part_event_index) -> arrayMap(
                                 (tick_update_event) -> (
                                     -- event_tuple.1: event_index
@@ -125,7 +125,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                     JSONExtractString(tick_update_event, 'type'),
                                     -- event_tuple.3: event_attributes
                                     JSONExtractArrayRaw(tick_update_event, 'attributes'),
-                                    -- event_tuple.4: is_swap
+                                    -- event_tuple.4: is_pre_v6_estimated_swap
+                                    is_v6 = 0 AND
                                     notEmpty(related_msg_dex_received_denom) AND
                                     -- is_swap part: exclude if event denom is the related msg dex received denom
                                     related_msg_dex_received_denom != JSONExtractString(
@@ -171,7 +172,22 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                 1
                             ),
                             ''
-                        )]
+                        )],
+                        -- - related_msg "field" is_v6 (to flag what is a v6 swap)
+                        [
+                            notEmpty(related_msg_dex_spent_event) AND
+                            notEmpty(related_msg_dex_received_event) AND
+                            arrayExists(
+                                (msg_part_event) -> (
+                                    JSONExtractString(msg_part_event, 'type') = 'TickUpdate' AND
+                                    arrayExists(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'SwapAmountIn',
+                                        JSONExtractArrayRaw(msg_part_event, 'attributes')
+                                    )
+                                ),
+                                dex_msg_part_events
+                            )
+                        ]
                     ),
                     -- precompute related_msg "fields" as arrayMap lambda arguments
                     -- - related_msg "field" related_msg_dex_spent_event
@@ -256,7 +272,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
         )
     ) AS `event_tuple`
 SETTINGS
-    -- the array joins in the `is_swap` fix are heavy on memory usage
+    -- the array joins in the `is_pre_v6_estimated_swap` fix are heavy on memory usage
     -- better for this to be slow than crash the application
     max_block_size = 100;
 

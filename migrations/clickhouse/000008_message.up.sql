@@ -37,14 +37,20 @@ FROM
         timestamp,
         height,
         txhash,
-        JSONExtractString(arrayJoin(JSONExtractArrayRaw(JSONExtractString(JSONExtractString(tx,
- 'body'),
- 'messages'))),
- '@type') AS type,
+        JSONExtractString(
+            arrayJoin(
+                JSONExtractArrayRaw(
+                    JSONExtractString(JSONExtractString(tx, 'body'), 'messages')
+                )
+            ),
+            '@type'
+        ) AS type,
         signer,
-        arrayJoin(JSONExtractArrayRaw(JSONExtractString(JSONExtractString(tx,
- 'body'),
- 'messages'))) AS message
+        arrayJoin(
+            JSONExtractArrayRaw(
+                JSONExtractString(JSONExtractString(tx, 'body'), 'messages')
+            )
+        ) AS message
     FROM spacebox.raw_transaction
     WHERE code = 0
 );

@@ -7,6 +7,7 @@ CREATE TABLE spacebox.message
     `timestamp` DateTime,
     `height` Int64,
     `txhash` String,
+    `message_index` Int16,
     `type` String,
     `signer` String,
     `message` String
@@ -15,6 +16,7 @@ ENGINE = ReplacingMergeTree
 ORDER BY (timestamp,
  height,
  txhash,
+ message_index,
  type,
  signer)
 SETTINGS index_granularity = 8192;
@@ -26,6 +28,7 @@ CREATE MATERIALIZED VIEW spacebox.message_writer TO spacebox.message
     `timestamp` DateTime,
     `height` Int64,
     `txhash` String,
+    `message_index` Int16,
     `type` String,
     `signer` String,
     `message` String
@@ -37,6 +40,13 @@ FROM
         timestamp,
         height,
         txhash,
+        arrayJoin(
+            arrayEnumerate(
+                JSONExtractArrayRaw(
+                    JSONExtractString(JSONExtractString(tx, 'body'), 'messages')
+                )
+            )
+        ) AS message_index,
         JSONExtractString(
             arrayJoin(
                 JSONExtractArrayRaw(

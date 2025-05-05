@@ -229,9 +229,10 @@ CREATE TABLE spacebox.raw_slinky_prices
     `price`             UInt128,
     `decimals`          UInt8,
     `nonce`             UInt64,
-    `quote_id`          Nullable(UInt16)
+    `quote_id`          Nullable(UInt16),
+    `query_height`      Int64
 )
-    ENGINE = ReplacingMergeTree
+    ENGINE = ReplacingMergeTree(`query_height`)
         PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
         ORDER BY (`pair_id`, `timestamp`) -- queries should contain `base` and `quote` in a single string for max performance
     SETTINGS index_granularity = 8192;
@@ -247,7 +248,8 @@ SELECT
     toUInt8OrZero(price_tuple.7)                    AS `decimals`,
     toUInt64OrZero(price_tuple.8)                   AS `nonce`,
     -- add quote ID (when available) to double check any mis-matches
-    toUInt16OrNull(price_tuple.9)                   AS `quote_id`
+    toUInt16OrNull(price_tuple.9)                   AS `quote_id`,
+    toInt64OrZero(JSONExtractString(message, 'height')) AS `query_height`
 FROM spacebox.raw_slinky_prices_topic
 ARRAY JOIN
     arrayMap(

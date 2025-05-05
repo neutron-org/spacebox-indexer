@@ -66,7 +66,6 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.wasm_txs_events_writer TO spacebox.wasm_txs_events
 (
-
     `timestamp` DateTime,
     `height` Int64,
     `txhash` String,
@@ -80,7 +79,7 @@ SELECT
     `timestamp`,
     `height`,
     `txhash`,
-    `event_index`
+    `event_index`,
     `signer`,
     JSONExtractString(
         arrayFirst(
@@ -95,8 +94,8 @@ SELECT
             JSONExtractArrayRaw(`attributes`)
         ),
         'value'
-    ) AS action,
+    ) AS `action`,
     `attributes`
 FROM
     spacebox.txs_events
-WHERE JSONExtractString(`type`) = 'wasm';
+WHERE `type` = 'wasm';

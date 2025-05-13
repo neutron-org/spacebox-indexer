@@ -16,6 +16,8 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
     `contract_address`  String,
     `token_0_balance`   UInt128,
     `token_1_balance`   UInt128,
+    `token_0_price`     Float32,
+    `token_1_price`     Float32,
     `price_0_to_1`      Float32,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
@@ -40,9 +42,12 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_deposit_writer TO space
     `contract_address`  String,
     `token_0_balance`   UInt128,
     `token_1_balance`   UInt128,
+    `token_0_price`     Float32,
+    `token_1_price`     Float32,
     `price_0_to_1`      Float32
 ) AS
 WITH
+    toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_0_to_1'), `event_attributes`), 'value')) AS `price_ratio`,
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
     event_tuple.2 as `event_attributes`
@@ -57,7 +62,9 @@ SELECT
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_balance'), `event_attributes`), 'value')) AS `token_0_balance`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_balance'), `event_attributes`), 'value')) AS `token_1_balance`,
-    toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_0_to_1'), `event_attributes`), 'value')) AS `price_0_to_1`
+    toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_price'), `event_attributes`), 'value')) AS `token_0_price`,
+    toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_price'), `event_attributes`), 'value')) AS `token_1_price`,
+    if(`token_1_price` > 0, `token_0_price` / `token_1_price`, `price_ratio`) AS `price_0_to_1`
 FROM spacebox.message_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
@@ -126,6 +133,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_withdrawal_writer TO sp
     `contract_address`  String,
     `token_0_balance`   UInt128,
     `token_1_balance`   UInt128,
+    `token_0_price`     Float32,
+    `token_1_price`     Float32,
     `price_0_to_1`      Float32
 ) AS
 WITH
@@ -143,6 +152,8 @@ SELECT
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
     0 AS `token_0_balance`,
     0 AS `token_1_balance`,
+    0 AS `token_0_price`,
+    0 AS `token_1_price`,
     0 AS `price_0_to_1`
 FROM spacebox.message_event
 ARRAY JOIN (

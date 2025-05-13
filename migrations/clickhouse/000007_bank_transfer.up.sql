@@ -16,7 +16,7 @@ CREATE TABLE spacebox.bank_transfer
     -- event data
     `type`              LowCardinality(String),
     `address`           String,
-    `amount`            Int256,
+    `amount`            UInt128,
     `denom`             LowCardinality(String),
     `coins`             String,
     -- add index for timeseries queries
@@ -62,11 +62,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
         `event_type` as `type`,
         -- add event attributes
         `event_address` as `address`,
-        if(
-            type = 'coin_spent',
-            -toInt128OrZero(extract(`event_coins`, '^(\\d+)')),
-            toInt128OrZero(extract(`event_coins`, '^(\\d+)'))
-        ) AS `amount`,
+        toUInt128OrZero(extract(`event_coins`, '^(\\d+)')) AS `amount`,
         extract(`event_coins`, '^\\d+(.*)') AS `denom`,
         -- append original coin string before parsing
         `event_coins` as `coins`
@@ -156,7 +152,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_height_writer TO spacebox.ban
         any(`timestamp`),
         `height`,
         `address`,
-        sumState(`amount`) as `amount`,
+        sumState(if(`type` = 'coin_spent', -`amount`, `amount`)) as `amount`,
         `denom`
     FROM spacebox.bank_transfer
     GROUP BY `address`, `denom`, `height`;
@@ -190,7 +186,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_minute_writer TO spacebox.ban
     SELECT
         toStartOfInterval(`timestamp`, INTERVAL 1 HOUR) as `timestamp`,
         `address`,
-        sumState(`amount`) as `amount`,
+        sumState(if(`type` = 'coin_spent', -`amount`, `amount`)) as `amount`,
         `denom`
     FROM spacebox.bank_transfer
     GROUP BY `address`, `denom`, `timestamp`;
@@ -224,7 +220,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_day_writer TO spacebox.bank_t
     SELECT
         toStartOfInterval(`timestamp`, INTERVAL 1 DAY) as `timestamp`,
         `address`,
-        sumState(`amount`) as `amount`,
+        sumState(if(`type` = 'coin_spent', -`amount`, `amount`)) as `amount`,
         `denom`
     FROM spacebox.bank_transfer
     GROUP BY `address`, `denom`, `timestamp`;

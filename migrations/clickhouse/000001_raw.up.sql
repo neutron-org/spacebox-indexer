@@ -218,56 +218,20 @@ CREATE TABLE spacebox.raw_slinky_prices_topic
 
 CREATE TABLE spacebox.raw_slinky_prices
 (
-    -- add pair_id for optimized queries
-    `pair_id`			LowCardinality(String)
-                        MATERIALIZED concat(`base`, '-', `quote`),
-    `timestamp`         DateTime64(9),
     `height`            Int64,
-    `id`                UInt16,
-    `base`              LowCardinality(String),
-    `quote`             LowCardinality(String),
-    `price`             UInt128,
-    `decimals`          UInt8,
-    `nonce`             UInt64,
-    `quote_id`          Nullable(UInt16),
-    `query_height`      Int64
+    `mappings`          String,
+    `prices`            String
 )
-    ENGINE = ReplacingMergeTree(`query_height`)
-        PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
-        ORDER BY (`pair_id`, `timestamp`) -- queries should contain `base` and `quote` in a single string for max performance
+    ENGINE = ReplacingMergeTree()
+        ORDER BY (`height`)
     SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS raw_slinky_prices_consumer TO spacebox.raw_slinky_prices AS
 SELECT
-    parseDateTime64BestEffortOrZero(price_tuple.1)  AS `timestamp`,
-    toInt64OrZero(price_tuple.2)                    AS `height`,
-    toInt16OrZero(price_tuple.3)                    AS `id`,
-    price_tuple.4                                   AS `base`,
-    price_tuple.5                                   AS `quote`,
-    toUInt128OrZero(price_tuple.6)                  AS `price`,
-    toUInt8OrZero(price_tuple.7)                    AS `decimals`,
-    toUInt64OrZero(price_tuple.8)                   AS `nonce`,
-    -- add quote ID (when available) to double check any mis-matches
-    toUInt16OrNull(price_tuple.9)                   AS `quote_id`,
-    toInt64OrZero(JSONExtractString(message, 'height')) AS `query_height`
-FROM spacebox.raw_slinky_prices_topic
-ARRAY JOIN
-    arrayMap(
-        (mapping, price) -> (
-            JSONExtractString(price, 'price', 'block_timestamp'),
-            JSONExtractString(price, 'price', 'block_height'),
-            JSONExtractString(price, 'id'),
-            JSONExtractString(mapping, 'currency_pair', 'Base'),
-            JSONExtractString(mapping, 'currency_pair', 'Quote'),
-            JSONExtractString(price, 'price', 'price'),
-            JSONExtractString(price, 'decimals'),
-            JSONExtractString(price, 'nonce'),
-            JSONExtractString(mapping, 'id')
-        ),
-        JSONExtractArrayRaw(message, 'mappings'),
-        JSONExtractArrayRaw(message, 'prices')
-    ) as price_tuple
-    WHERE height > 0;
+    toInt64OrZero(JSONExtractString(message, 'height')) AS `height`,
+    JSONExtractString(message, 'mappings')              AS `mappings`,
+    JSONExtractString(message, 'prices')                AS `prices`
+FROM spacebox.raw_slinky_prices_topic;
 
 -- spacebox.raw_dex_pool_metadata_topic definition
 

@@ -8,11 +8,11 @@ CREATE TABLE spacebox.bank_transfer
     `block_part_index`  Int8,
     `tx_index`          Int32,
     `event_index`       Int32,
+    -- add computed sort key for easier event ordering
+    `sort_key`          Tuple(Int64, Int8, Int32, Int32)
+                        MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
     -- add coin index so that replacing merge tree keeps all coins of one event
     `coins_index`       Int32,
-    -- add computed sort key for easier event ordering
-    `sort_key`          Tuple(Int64, Int8, Int32, Int32, Int32)
-                        MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`, `coins_index`),
     -- event data
     `type`              LowCardinality(String),
     `address`           String,
@@ -26,7 +26,7 @@ CREATE TABLE spacebox.bank_transfer
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
-ORDER BY "sort_key"
+ORDER BY (`sort_key`, `coins_index`)
 SETTINGS index_granularity = 8192;
 
 -- spacebox.bank_transfer_writer source

@@ -122,4 +122,109 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
                 arrayEnumerate(`msg_events`)
             )
         )
-    ) AS `event_tuple`
+    ) AS `event_tuple`;
+
+
+-- spacebox.bank_transfer_by_height table
+
+CREATE TABLE spacebox.bank_transfer_by_height
+(
+    `timestamp`         DateTime,
+    `height`            Int64,
+    -- event data
+    `address`           String,
+    `amount`            AggregateFunction(sum, Int256),
+    `denom`             LowCardinality(String),
+    -- add index for timeseries queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax
+)
+-- aggregate to block height for faster windowed queries (sums)
+ENGINE = AggregatingMergeTree()
+ORDER BY (`address`, `denom`, `height`)
+SETTINGS index_granularity = 8192;
+
+-- spacebox.bank_transfer_by_height_writer source
+
+CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_height_writer TO spacebox.bank_transfer_by_height (
+    `timestamp`         DateTime,
+    `height`            Int64,
+    `address`           String,
+    `amount`            Int256,
+    `denom`             LowCardinality(String)
+) AS
+    SELECT
+        any(`timestamp`),
+        `height`,
+        `address`,
+        sumState(`amount`) as `amount`,
+        `denom`
+    FROM spacebox.bank_transfer
+    GROUP BY `address`, `denom`, `height`;
+
+
+-- spacebox.bank_transfer_by_minute table
+
+CREATE TABLE spacebox.bank_transfer_by_minute
+(
+    `timestamp`         DateTime,
+    -- event data
+    `address`           String,
+    `amount`            AggregateFunction(sum, Int256),
+    `denom`             LowCardinality(String),
+    -- add index for timeseries queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax
+)
+-- aggregate to block height for faster windowed queries (sums)
+ENGINE = AggregatingMergeTree()
+ORDER BY (`address`, `denom`, `timestamp`)
+SETTINGS index_granularity = 8192;
+
+-- spacebox.bank_transfer_by_minute_writer source
+
+CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_minute_writer TO spacebox.bank_transfer_by_minute (
+    `timestamp`         DateTime,
+    `address`           String,
+    `amount`            Int256,
+    `denom`             LowCardinality(String)
+) AS
+    SELECT
+        toStartOfInterval(`timestamp`, INTERVAL 1 HOUR) as `timestamp`,
+        `address`,
+        sumState(`amount`) as `amount`,
+        `denom`
+    FROM spacebox.bank_transfer
+    GROUP BY `address`, `denom`, `timestamp`;
+
+
+-- spacebox.bank_transfer_by_day table
+
+CREATE TABLE spacebox.bank_transfer_by_day
+(
+    `timestamp`         DateTime,
+    -- event data
+    `address`           String,
+    `amount`            AggregateFunction(sum, Int256),
+    `denom`             LowCardinality(String),
+    -- add index for timeseries queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax
+)
+-- aggregate to block height for faster windowed queries (sums)
+ENGINE = AggregatingMergeTree()
+ORDER BY (`address`, `denom`, `timestamp`)
+SETTINGS index_granularity = 8192;
+
+-- spacebox.bank_transfer_by_day_writer source
+
+CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_day_writer TO spacebox.bank_transfer_by_day (
+    `timestamp`         DateTime,
+    `address`           String,
+    `amount`            Int256,
+    `denom`             LowCardinality(String)
+) AS
+    SELECT
+        toStartOfInterval(`timestamp`, INTERVAL 1 DAY) as `timestamp`,
+        `address`,
+        sumState(`amount`) as `amount`,
+        `denom`
+    FROM spacebox.bank_transfer
+    GROUP BY `address`, `denom`, `timestamp`;

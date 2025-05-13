@@ -103,10 +103,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
                     ),
                     -- filter to events for table
                     arrayFilter(
-                        (event_type) -> (
-                            event_type = 'coin_spent' OR
-                            event_type = 'coin_received'
-                        ),
+                        (event_type) -> event_type in ('coin_spent', 'coin_received'),
                         arrayMap(
                             (msg_event) -> JSONExtractString(msg_event, 'type'),
                             [msg_event]

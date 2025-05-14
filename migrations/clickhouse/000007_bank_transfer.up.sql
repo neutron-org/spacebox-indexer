@@ -142,7 +142,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_height_writer TO spacebox.ban
     `timestamp`         DateTime,
     `height`            Int64,
     `address`           String,
-    `amount_state`      Int256,
+    `amount_state`      AggregateFunction(sum, Int256),
     `denom`             LowCardinality(String)
 ) AS
     WITH
@@ -171,7 +171,7 @@ CREATE TABLE spacebox.bank_transfer_by_minute
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax
 )
--- aggregate to block height for faster windowed queries (sums)
+-- aggregate to time period for faster windowed queries (sums)
 ENGINE = AggregatingMergeTree()
 ORDER BY (`address`, `denom`, `timestamp`)
 SETTINGS index_granularity = 8192;
@@ -181,7 +181,7 @@ SETTINGS index_granularity = 8192;
 CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_minute_writer TO spacebox.bank_transfer_by_minute (
     `timestamp`         DateTime,
     `address`           String,
-    `amount_state`      Int256,
+    `amount_state`      AggregateFunction(sum, Int256),
     `denom`             LowCardinality(String)
 ) AS
     SELECT
@@ -205,7 +205,7 @@ CREATE TABLE spacebox.bank_transfer_by_day
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax
 )
--- aggregate to block height for faster windowed queries (sums)
+-- aggregate to time period for faster windowed queries (sums)
 ENGINE = AggregatingMergeTree()
 ORDER BY (`address`, `denom`, `timestamp`)
 SETTINGS index_granularity = 8192;
@@ -215,7 +215,7 @@ SETTINGS index_granularity = 8192;
 CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_day_writer TO spacebox.bank_transfer_by_day (
     `timestamp`         DateTime,
     `address`           String,
-    `amount_state`      Int256,
+    `amount_state`      AggregateFunction(sum, Int256),
     `denom`             LowCardinality(String)
 ) AS
     SELECT

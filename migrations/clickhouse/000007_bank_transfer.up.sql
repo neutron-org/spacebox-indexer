@@ -181,7 +181,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_minute_writer TO spacebox.ban
     `denom`             LowCardinality(String)
 ) AS
     SELECT
-        toStartOfInterval(`timestamp`, INTERVAL 1 HOUR) as `timestamp`,
+        toStartOfInterval(`timestamp`, INTERVAL 1 MINUTE) as `timestamp`,
         `address`,
         sumState(if(`type` = 'coin_spent', -`amount`, `amount`)) as `amount`,
         `denom`

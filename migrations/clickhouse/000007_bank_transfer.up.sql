@@ -225,3 +225,35 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_day_writer TO spacebox.bank_t
         `denom`
     FROM spacebox.bank_transfer_by_height
     GROUP BY `address`, `denom`, `timestamp`;
+
+
+-- spacebox.bank_transfer_state table
+
+CREATE TABLE spacebox.bank_transfer_state
+(
+    `timestamp_state`   AggregateFunction(max, DateTime),
+    -- event data
+    `address`           String,
+    `amount_state`      AggregateFunction(sum, Int256),
+    `denom`             LowCardinality(String),
+)
+-- aggregate to user denom for faster user denom state lookups
+ENGINE = AggregatingMergeTree()
+ORDER BY (`address`, `denom`)
+SETTINGS index_granularity = 8192;
+
+-- spacebox.bank_transfer_state_writer source
+
+CREATE MATERIALIZED VIEW spacebox.bank_transfer_state_writer TO spacebox.bank_transfer_state (
+    `timestamp_state`   AggregateFunction(max, DateTime),
+    `address`           String,
+    `amount_state`      AggregateFunction(sum, Int256),
+    `denom`             LowCardinality(String)
+) AS
+    SELECT
+        maxState(`timestamp`) as `timestamp_state`,
+        `address`,
+        sumMergeState(`amount_state`) as `amount_state`,
+        `denom`
+    FROM spacebox.bank_transfer_by_height
+    GROUP BY `address`, `denom`;

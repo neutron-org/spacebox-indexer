@@ -146,7 +146,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_height_writer TO spacebox.ban
     `denom`             LowCardinality(String)
 ) AS
     SELECT
-        any(`timestamp`),
+        any(`timestamp`) as `timestamp`,
         `height`,
         `address`,
         sumState(if(`type` = 'coin_spent', -`amount`, `amount`)) as `amount`,

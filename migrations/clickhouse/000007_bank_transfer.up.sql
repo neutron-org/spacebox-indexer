@@ -166,7 +166,7 @@ CREATE TABLE spacebox.bank_transfer_by_minute
     `timestamp`         DateTime,
     -- event data
     `address`           String,
-    `amount`            AggregateFunction(sum, Int256),
+    `amount_state`      AggregateFunction(sum, Int256),
     `denom`             LowCardinality(String),
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax
@@ -181,15 +181,15 @@ SETTINGS index_granularity = 8192;
 CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_minute_writer TO spacebox.bank_transfer_by_minute (
     `timestamp`         DateTime,
     `address`           String,
-    `amount`            Int256,
+    `amount_state`      Int256,
     `denom`             LowCardinality(String)
 ) AS
     SELECT
         toStartOfInterval(`timestamp`, INTERVAL 1 MINUTE) as `timestamp`,
         `address`,
-        sumState(if(`type` = 'coin_spent', -`amount`, `amount`)) as `amount`,
+        sumMergeState(`amount_state`) as `amount_state`,
         `denom`
-    FROM spacebox.bank_transfer
+    FROM spacebox.bank_transfer_by_height
     GROUP BY `address`, `denom`, `timestamp`;
 
 
@@ -200,7 +200,7 @@ CREATE TABLE spacebox.bank_transfer_by_day
     `timestamp`         DateTime,
     -- event data
     `address`           String,
-    `amount`            AggregateFunction(sum, Int256),
+    `amount_state`      AggregateFunction(sum, Int256),
     `denom`             LowCardinality(String),
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax
@@ -215,13 +215,13 @@ SETTINGS index_granularity = 8192;
 CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_day_writer TO spacebox.bank_transfer_by_day (
     `timestamp`         DateTime,
     `address`           String,
-    `amount`            Int256,
+    `amount_state`      Int256,
     `denom`             LowCardinality(String)
 ) AS
     SELECT
         toStartOfInterval(`timestamp`, INTERVAL 1 DAY) as `timestamp`,
         `address`,
-        sumState(if(`type` = 'coin_spent', -`amount`, `amount`)) as `amount`,
+        sumMergeState(`amount_state`) as `amount_state`,
         `denom`
-    FROM spacebox.bank_transfer
+    FROM spacebox.bank_transfer_by_height
     GROUP BY `address`, `denom`, `timestamp`;

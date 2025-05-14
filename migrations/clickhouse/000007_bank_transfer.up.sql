@@ -126,7 +126,7 @@ CREATE TABLE spacebox.bank_transfer_by_height
     `height`            Int64,
     -- event data
     `address`           String,
-    `amount`            AggregateFunction(sum, Int256),
+    `amount_state`      AggregateFunction(sum, Int256),
     `denom`             LowCardinality(String),
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax
@@ -142,17 +142,21 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_height_writer TO spacebox.ban
     `timestamp`         DateTime,
     `height`            Int64,
     `address`           String,
-    `amount`            Int256,
+    `amount_state`      Int256,
     `denom`             LowCardinality(String)
 ) AS
+    WITH
+        if(`type` = 'coin_spent', -`amount`, `amount`) as `amount_delta`
     SELECT
         any(`timestamp`) as `timestamp`,
         `height`,
         `address`,
-        sumState(if(`type` = 'coin_spent', -`amount`, `amount`)) as `amount`,
+        sumState(`amount_delta`) as `amount_state`,
         `denom`
     FROM spacebox.bank_transfer
-    GROUP BY `address`, `denom`, `height`;
+    GROUP BY `address`, `denom`, `height`
+    -- ignore zero-sum withdrawal-then-deposit same amount during block behavior
+    HAVING sum(`amount_delta`) != 0;
 
 
 -- spacebox.bank_transfer_by_minute table

@@ -15,6 +15,9 @@ CREATE TABLE spacebox.bank_transfer
     `coins_index`       Int32,
     -- event data
     `type`              LowCardinality(String),
+    `increment`         Boolean MATERIALIZED `type` = 'coin_received',
+    `decrement`         Boolean MATERIALIZED `type` = 'coin_spent',
+    `sign`              Int8 MATERIALIZED if(`decrement` = 1, -1, 1),
     `address`           String,
     `denom`             LowCardinality(String),
     `amount`            UInt128,
@@ -22,12 +25,74 @@ CREATE TABLE spacebox.bank_transfer
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for user lookups type queries
-    INDEX `address_index` (`address`) TYPE bloom_filter(0.01)
+    INDEX `address_index` (`address`) TYPE bloom_filter(0.01),
+    -- add pre-aggregation projections for differently grouped data
+    PROJECTION bank_transfer_balance (
+        SELECT
+            `address`,
+            `denom`,
+            sum(`amount` * `sign`) as `balance`
+        GROUP BY `address`, `denom`
+    ),
+    PROJECTION bank_transfer_by_minute (
+        SELECT
+            toStartOfMinute(`timestamp`) as `minute`,
+            `address`,
+            `denom`,
+            sum(`amount` * `sign`) as `amount_delta`
+        GROUP BY `address`, `denom`, `minute`
+    ),
+    PROJECTION bank_transfer_by_day (
+        SELECT
+            toStartOfDay(`timestamp`) as `day`,
+            `address`,
+            `denom`,
+            sum(`amount` * `sign`) as `amount_delta`
+        GROUP BY `address`, `denom`, `day`
+    )
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
+PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in ReplacingMergeTree merges
 ORDER BY (`sort_key`, `coins_index`)
-SETTINGS index_granularity = 8192;
+SETTINGS
+    -- see docs: https://clickhouse.com/docs/operations/settings/merge-tree-settings#deduplicate_merge_projection_mode
+    deduplicate_merge_projection_mode = 'rebuild',
+    index_granularity = 8192;
+
+
+-- spacebox.bank_transfer bank_transfer_balance projection view
+
+CREATE VIEW spacebox.bank_transfer_balance AS
+    SELECT
+        `address`,
+        `denom`,
+        sum(`amount` * `sign`) as `balance`
+    FROM spacebox.bank_transfer
+    GROUP BY `address`, `denom`;
+
+-- spacebox.bank_transfer bank_transfer_by_minute projection view
+
+CREATE VIEW spacebox.bank_transfer_by_minute AS
+    SELECT
+        toStartOfMinute(`timestamp`) as `minute`,
+        `address`,
+        `denom`,
+        sum(`amount` * `sign`) as `amount_delta`
+    FROM spacebox.bank_transfer
+    GROUP BY `address`, `denom`, `minute`;
+
+-- spacebox.bank_transfer bank_transfer_by_day projection view
+
+CREATE VIEW spacebox.bank_transfer_by_day AS
+    SELECT
+        toStartOfDay(`timestamp`) as `day`,
+        `address`,
+        `denom`,
+        sum(`amount` * `sign`) as `amount_delta`
+    FROM spacebox.bank_transfer
+    GROUP BY `address`, `denom`, `day`;
+
 
 -- spacebox.bank_transfer_writer source
 
@@ -116,144 +181,3 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
             )
         )
     ) AS `event_tuple`;
-
-
--- spacebox.bank_transfer_by_height table
-
-CREATE TABLE spacebox.bank_transfer_by_height
-(
-    `timestamp`         DateTime,
-    `height`            Int64,
-    -- event data
-    `address`           String,
-    `amount_state`      AggregateFunction(sum, Int256),
-    `denom`             LowCardinality(String),
-    -- add index for timeseries queries
-    INDEX `timestamp_index` (`timestamp`) TYPE minmax
-)
--- aggregate to block height for faster windowed queries (sums)
-ENGINE = AggregatingMergeTree()
-ORDER BY (`address`, `denom`, `height`)
-SETTINGS index_granularity = 8192;
-
--- spacebox.bank_transfer_by_height_writer source
-
-CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_height_writer TO spacebox.bank_transfer_by_height (
-    `timestamp`         DateTime,
-    `height`            Int64,
-    `address`           String,
-    `amount_state`      AggregateFunction(sum, Int256),
-    `denom`             LowCardinality(String)
-) AS
-    WITH
-        if(`type` = 'coin_spent', -`amount`, `amount`) as `amount_delta`
-    SELECT
-        any(`timestamp`) as `timestamp`,
-        `height`,
-        `address`,
-        sumState(`amount_delta`) as `amount_state`,
-        `denom`
-    FROM spacebox.bank_transfer
-    GROUP BY `address`, `denom`, `height`
-    -- ignore zero-sum withdrawal-then-deposit same amount during block behavior
-    HAVING sum(`amount_delta`) != 0;
-
-
--- spacebox.bank_transfer_by_minute table
-
-CREATE TABLE spacebox.bank_transfer_by_minute
-(
-    `timestamp`         DateTime,
-    -- event data
-    `address`           String,
-    `amount_state`      AggregateFunction(sum, Int256),
-    `denom`             LowCardinality(String),
-    -- add index for timeseries queries
-    INDEX `timestamp_index` (`timestamp`) TYPE minmax
-)
--- aggregate to time period for faster windowed queries (sums)
-ENGINE = AggregatingMergeTree()
-ORDER BY (`address`, `denom`, `timestamp`)
-SETTINGS index_granularity = 8192;
-
--- spacebox.bank_transfer_by_minute_writer source
-
-CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_minute_writer TO spacebox.bank_transfer_by_minute (
-    `timestamp`         DateTime,
-    `address`           String,
-    `amount_state`      AggregateFunction(sum, Int256),
-    `denom`             LowCardinality(String)
-) AS
-    SELECT
-        toStartOfInterval(`timestamp`, INTERVAL 1 MINUTE) as `timestamp`,
-        `address`,
-        sumMergeState(`amount_state`) as `amount_state`,
-        `denom`
-    FROM spacebox.bank_transfer_by_height
-    GROUP BY `address`, `denom`, `timestamp`;
-
-
--- spacebox.bank_transfer_by_day table
-
-CREATE TABLE spacebox.bank_transfer_by_day
-(
-    `timestamp`         DateTime,
-    -- event data
-    `address`           String,
-    `amount_state`      AggregateFunction(sum, Int256),
-    `denom`             LowCardinality(String),
-    -- add index for timeseries queries
-    INDEX `timestamp_index` (`timestamp`) TYPE minmax
-)
--- aggregate to time period for faster windowed queries (sums)
-ENGINE = AggregatingMergeTree()
-ORDER BY (`address`, `denom`, `timestamp`)
-SETTINGS index_granularity = 8192;
-
--- spacebox.bank_transfer_by_day_writer source
-
-CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_day_writer TO spacebox.bank_transfer_by_day (
-    `timestamp`         DateTime,
-    `address`           String,
-    `amount_state`      AggregateFunction(sum, Int256),
-    `denom`             LowCardinality(String)
-) AS
-    SELECT
-        toStartOfInterval(`timestamp`, INTERVAL 1 DAY) as `timestamp`,
-        `address`,
-        sumMergeState(`amount_state`) as `amount_state`,
-        `denom`
-    FROM spacebox.bank_transfer_by_height
-    GROUP BY `address`, `denom`, `timestamp`;
-
-
--- spacebox.bank_transfer_state table
-
-CREATE TABLE spacebox.bank_transfer_state
-(
-    `timestamp_state`   AggregateFunction(max, DateTime),
-    -- event data
-    `address`           String,
-    `amount_state`      AggregateFunction(sum, Int256),
-    `denom`             LowCardinality(String),
-)
--- aggregate to user denom for faster user denom state lookups
-ENGINE = AggregatingMergeTree()
-ORDER BY (`address`, `denom`)
-SETTINGS index_granularity = 8192;
-
--- spacebox.bank_transfer_state_writer source
-
-CREATE MATERIALIZED VIEW spacebox.bank_transfer_state_writer TO spacebox.bank_transfer_state (
-    `timestamp_state`   AggregateFunction(max, DateTime),
-    `address`           String,
-    `amount_state`      AggregateFunction(sum, Int256),
-    `denom`             LowCardinality(String)
-) AS
-    SELECT
-        maxState(`timestamp`) as `timestamp_state`,
-        `address`,
-        sumMergeState(`amount_state`) as `amount_state`,
-        `denom`
-    FROM spacebox.bank_transfer_by_height
-    GROUP BY `address`, `denom`;

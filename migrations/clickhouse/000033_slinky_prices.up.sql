@@ -14,12 +14,39 @@ CREATE TABLE spacebox.slinky_prices
     `price`             UInt128,
     `decimals`          UInt8,
     `nonce`             UInt64,
-    `quote_id`          UInt16
+    `quote_id`          UInt16,
+    PROJECTION slinky_prices_state (
+        SELECT
+            argMax(`timestamp`, `timestamp`),
+            argMax(`height`, `timestamp`) as `height`,
+            `base`,
+            `quote`,
+            argMax(`price`, `timestamp`) as `price`,
+            argMax(`decimals`, `timestamp`) as `decimals`
+        GROUP BY `base`, `quote`
+    )
 )
-    ENGINE = ReplacingMergeTree(`query_height`)
-        PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
-        ORDER BY (`id`, `timestamp`) -- queries should be to a specific pair id for max performance
-    SETTINGS index_granularity = 8192;
+ENGINE = ReplacingMergeTree(`query_height`)
+    PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
+    ORDER BY (`id`, `timestamp`) -- queries should be to a specific pair id for max performance
+SETTINGS
+    deduplicate_merge_projection_mode = 'rebuild'
+    index_granularity = 8192;
+
+
+-- spacebox.slinky_prices slinky_prices_state projection view
+
+CREATE VIEW spacebox.slinky_prices_state AS
+    SELECT
+        argMax(`timestamp`, sp.`timestamp`) as `timestamp`,
+        argMax(`height`, sp.`timestamp`) as `height`,
+        `base`,
+        `quote`,
+        argMax(`price`, sp.`timestamp`) as `price`,
+        argMax(`decimals`, sp.`timestamp`) as `decimals`
+    FROM spacebox.slinky_prices as sp
+    GROUP BY `base`, `quote`;
+
 
 -- spacebox.slinky_prices_writer source
 

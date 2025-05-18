@@ -37,6 +37,15 @@ CREATE TABLE spacebox.bank_transfer
             sum(`amount` * `sign`) as `balance`
         GROUP BY `address`, `denom`
     ),
+    PROJECTION bank_transfer_by_height (
+        SELECT
+            `timestamp`,
+            `height`,
+            `address`,
+            `denom`,
+            sum(`amount` * `sign`) as `amount_delta`
+        GROUP BY `address`, `denom`, `height`, `timestamp`
+    ),
     PROJECTION bank_transfer_by_minute (
         SELECT
             toStartOfMinute(`timestamp`) as `minute`,
@@ -73,6 +82,18 @@ CREATE VIEW spacebox.bank_transfer_balance AS
         sum(`amount` * `sign`) as `balance`
     FROM spacebox.bank_transfer
     GROUP BY `address`, `denom`;
+
+-- spacebox.bank_transfer bank_transfer_by_height projection view
+
+CREATE VIEW spacebox.bank_transfer_by_height AS
+    SELECT
+        `timestamp`,
+        `height`,
+        `address`,
+        `denom`,
+        sum(`amount` * `sign`) as `amount_delta`
+    FROM spacebox.bank_transfer
+    GROUP BY `address`, `denom`, `height`, `timestamp`;
 
 -- spacebox.bank_transfer bank_transfer_by_minute projection view
 

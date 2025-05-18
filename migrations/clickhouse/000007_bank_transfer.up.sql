@@ -18,6 +18,7 @@ CREATE TABLE spacebox.bank_transfer
     `address`           String,
     `denom`             LowCardinality(String),
     `amount`            UInt128,
+    `coins`             String,
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for user lookups type queries
@@ -41,7 +42,8 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
     `type`              LowCardinality(String),
     `address`           String,
     `denom`             LowCardinality(String),
-    `amount`            UInt128
+    `amount`            UInt128,
+    `coins`             String
 ) AS
     WITH
         -- define event_tuple parts for row fields
@@ -61,7 +63,9 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
         -- add event attributes
         `event_address` as `address`,
         extract(`event_coins`, '^\\d+(.*)') AS `denom`,
-        toUInt128OrZero(extract(`event_coins`, '^(\\d+)')) AS `amount`
+        toUInt128OrZero(extract(`event_coins`, '^(\\d+)')) AS `amount`,
+        -- append original coin string before parsing
+        `event_coins` as `coins`
     FROM spacebox.message_event
     ARRAY JOIN (
         -- Extract "message part" events with event_index

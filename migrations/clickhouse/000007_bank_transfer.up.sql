@@ -55,7 +55,7 @@ CREATE TABLE spacebox.bank_transfer
             sum(`amount` * `sign`) as `amount_delta`
         GROUP BY `address`, `denom`, `day`
     ),
-    PROJECTION bank_transfer_balance (
+    PROJECTION bank_transfer_state (
         SELECT
             `address`,
             `denom`,
@@ -107,9 +107,9 @@ CREATE VIEW spacebox.bank_transfer_by_day AS
     FROM spacebox.bank_transfer
     GROUP BY `address`, `denom`, `day`;
 
--- spacebox.bank_transfer bank_transfer_balance projection view
+-- spacebox.bank_transfer bank_transfer_state projection view
 
-CREATE VIEW spacebox.bank_transfer_balance AS
+CREATE VIEW spacebox.bank_transfer_state AS
     SELECT
         `address`,
         `denom`,

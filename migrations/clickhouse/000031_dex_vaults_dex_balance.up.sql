@@ -26,8 +26,9 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
     PROJECTION dex_vaults_dex_balance_state (
         SELECT
             `contract_address`,
-            argMax(`token_0_balance`, `sort_key`) as token_0_balance,
-            argMax(`token_1_balance`, `sort_key`) as token_1_balance
+            argMax(`height`, `sort_key`) as `height`,
+            argMax(`token_0_balance`, `sort_key`) as `token_0_balance`,
+            argMax(`token_1_balance`, `sort_key`) as `token_1_balance`
         GROUP BY `contract_address`
     )
 )
@@ -44,8 +45,9 @@ SETTINGS
 CREATE VIEW spacebox.dex_vaults_dex_balance_state AS
     SELECT
         `contract_address`,
-        argMax(`token_0_balance`, `sort_key`) as token_0_balance,
-        argMax(`token_1_balance`, `sort_key`) as token_1_balance
+        argMax(`height`, `sort_key`) as `height`,
+        argMax(`token_0_balance`, `sort_key`) as `token_0_balance`,
+        argMax(`token_1_balance`, `sort_key`) as `token_1_balance`
     FROM spacebox.dex_vaults_dex_balance
     GROUP BY `contract_address`;
 

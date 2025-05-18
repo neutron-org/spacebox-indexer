@@ -57,6 +57,7 @@ CREATE TABLE spacebox.bank_transfer
     ),
     PROJECTION bank_transfer_state (
         SELECT
+            argMax(`height`, `sort_key`) as `height`,
             `address`,
             `denom`,
             sum(`amount` * `sign`) as `balance`
@@ -111,6 +112,7 @@ CREATE VIEW spacebox.bank_transfer_by_day AS
 
 CREATE VIEW spacebox.bank_transfer_state AS
     SELECT
+        argMax(`height`, `sort_key`) as `height`,
         `address`,
         `denom`,
         sum(`amount` * `sign`) as `balance`

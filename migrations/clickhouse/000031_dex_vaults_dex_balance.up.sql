@@ -22,12 +22,33 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for contract_address type queries
-    INDEX `contract_address_index` (`contract_address`) TYPE bloom_filter
+    INDEX `contract_address_index` (`contract_address`) TYPE bloom_filter,
+    PROJECTION dex_vaults_dex_balance_state (
+        SELECT
+            `contract_address`,
+            argMax(`token_0_balance`, `sort_key`) as token_0_balance,
+            argMax(`token_1_balance`, `sort_key`) as token_1_balance
+        GROUP BY `contract_address`
+    )
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
 ORDER BY `sort_key`
-SETTINGS index_granularity = 8192;
+SETTINGS
+    deduplicate_merge_projection_mode = 'rebuild'
+    index_granularity = 8192;
+
+
+-- spacebox.dex_vaults_dex_balance dex_vaults_dex_balance_state projection view
+
+CREATE VIEW spacebox.dex_vaults_dex_balance_state AS
+    SELECT
+        `contract_address`,
+        argMax(`token_0_balance`, `sort_key`) as token_0_balance,
+        argMax(`token_1_balance`, `sort_key`) as token_1_balance
+    FROM spacebox.dex_vaults_dex_balance
+    GROUP BY `contract_address`;
+
 
 -- spacebox.dex_vaults_dex_balance_deposit_writer source
 

@@ -30,13 +30,6 @@ CREATE TABLE spacebox.bank_transfer
     -- note: a different solution using MVs is reverted in this line's commit
     --       but it was determined to be maybe too complicated to implement at the time
     --       consider it if the projection/views are becoming slow
-    PROJECTION bank_transfer_balance (
-        SELECT
-            `address`,
-            `denom`,
-            sum(`amount` * `sign`) as `balance`
-        GROUP BY `address`, `denom`
-    ),
     PROJECTION bank_transfer_by_height (
         SELECT
             `timestamp`,
@@ -61,6 +54,13 @@ CREATE TABLE spacebox.bank_transfer
             `denom`,
             sum(`amount` * `sign`) as `amount_delta`
         GROUP BY `address`, `denom`, `day`
+    ),
+    PROJECTION bank_transfer_balance (
+        SELECT
+            `address`,
+            `denom`,
+            sum(`amount` * `sign`) as `balance`
+        GROUP BY `address`, `denom`
     )
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
@@ -72,16 +72,6 @@ SETTINGS
     deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
-
--- spacebox.bank_transfer bank_transfer_balance projection view
-
-CREATE VIEW spacebox.bank_transfer_balance AS
-    SELECT
-        `address`,
-        `denom`,
-        sum(`amount` * `sign`) as `balance`
-    FROM spacebox.bank_transfer
-    GROUP BY `address`, `denom`;
 
 -- spacebox.bank_transfer bank_transfer_by_height projection view
 
@@ -116,6 +106,16 @@ CREATE VIEW spacebox.bank_transfer_by_day AS
         sum(`amount` * `sign`) as `amount_delta`
     FROM spacebox.bank_transfer
     GROUP BY `address`, `denom`, `day`;
+
+-- spacebox.bank_transfer bank_transfer_balance projection view
+
+CREATE VIEW spacebox.bank_transfer_balance AS
+    SELECT
+        `address`,
+        `denom`,
+        sum(`amount` * `sign`) as `balance`
+    FROM spacebox.bank_transfer
+    GROUP BY `address`, `denom`;
 
 
 -- spacebox.bank_transfer_writer source

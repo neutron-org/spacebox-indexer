@@ -32,7 +32,7 @@ CREATE TABLE spacebox.dex_shares_by_pool
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
-ORDER BY (`sort_key`, `TokenIn`)
+ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`, `TokenIn`)
 SETTINGS index_granularity = 8192;
 
 -- spacebox.dex_shares_by_pool_deposit_writer source

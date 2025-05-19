@@ -33,7 +33,7 @@ CREATE TABLE spacebox.dex_vaults_shares
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
-ORDER BY `sort_key`
+ORDER BY `height`, `block_part_index`, `tx_index`, `event_index`
 SETTINGS index_granularity = 8192;
 
 

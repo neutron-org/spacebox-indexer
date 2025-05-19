@@ -67,7 +67,7 @@ CREATE TABLE spacebox.bank_transfer
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
 PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in ReplacingMergeTree merges
-ORDER BY (`sort_key`, `coins_index`)
+ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`, `coins_index`)
 SETTINGS
     -- see docs: https://clickhouse.com/docs/operations/settings/merge-tree-settings#deduplicate_merge_projection_mode
     deduplicate_merge_projection_mode = 'rebuild',

@@ -24,8 +24,11 @@ CREATE TABLE spacebox.dex_shares_by_pool_agg
     `shares_in`         UInt128,
     `shares_out`        UInt128,
     -- aggregation state information
-    `user_shares`       UInt128,
-    `total_shares`      UInt128,
+    -- note: allow enough space for overflowed numbers:
+    --       because events may be missing, numbers may be greater than intended
+    --       numbers may also be less than zero, but we protect against this
+    `user_shares`       UInt256,
+    `total_shares`      UInt256,
     `updated_at`        DateTime MATERIALIZED nowInBlock(),
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
@@ -60,8 +63,8 @@ TO spacebox.dex_shares_by_pool_agg (
     `shares_in`         UInt128,
     `shares_out`        UInt128,
     -- aggregation state information
-    `user_shares`       UInt128,
-    `total_shares`      UInt128,
+    `user_shares`       UInt256,
+    `total_shares`      UInt256
 ) AS
     WITH
         `shares_in` - `shares_out` as `shares_delta`
@@ -79,16 +82,26 @@ TO spacebox.dex_shares_by_pool_agg (
         `Fee`,
         `SharesMinted` as `shares_in`,
         `SharesRemoved` as `shares_out`,
-        sum(`shares_delta`) OVER (
-            -- partition sums to each user's pool
-            PARTITION BY "TokenZero", "TokenOne", "TickIndex", "Fee", "Receiver"
-            ORDER BY "sort_key" ASC
-            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        -- note: make cumulative value minimum 0 in case events are missing
+        greatest(
+            sum(`shares_delta`) OVER (
+                -- partition sums to each user's pool
+                PARTITION BY "TokenZero", "TokenOne", "TickIndex", "Fee", "Receiver"
+                ORDER BY "sort_key" ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ),
+            0
         ) as "user_shares",
-        sum(`shares_delta`) OVER (
-            -- partition sums to each pool
-            PARTITION BY "TokenZero", "TokenOne", "TickIndex", "Fee"
-            ORDER BY "sort_key" ASC
-            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        -- note: make cumulative value minimum 0 in case events are missing
+        greatest(
+            sum(`shares_delta`) OVER (
+                -- partition sums to each pool
+                PARTITION BY "TokenZero", "TokenOne", "TickIndex", "Fee"
+                ORDER BY "sort_key" ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ),
+            0
         ) as "total_shares"
-    FROM spacebox.dex_shares;
+    FROM spacebox.dex_shares
+    -- ensure that duplicates are not summed twice
+    FINAL;

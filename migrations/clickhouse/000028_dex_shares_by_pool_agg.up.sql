@@ -86,22 +86,22 @@ TO spacebox.dex_shares_by_pool_agg (
         greatest(
             sum(`shares_delta`) OVER (
                 -- partition sums to each user's pool
-                PARTITION BY "TokenZero", "TokenOne", "TickIndex", "Fee", "Receiver"
-                ORDER BY "sort_key" ASC
+                PARTITION BY `TokenZero`, `TokenOne`, `TickIndex`, `Fee`, `Receiver`
+                ORDER BY `sort_key` ASC
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             ),
             0
-        ) as "user_shares",
+        ) as `user_shares`,
         -- note: make cumulative value minimum 0 in case events are missing
         greatest(
             sum(`shares_delta`) OVER (
                 -- partition sums to each pool
-                PARTITION BY "TokenZero", "TokenOne", "TickIndex", "Fee"
-                ORDER BY "sort_key" ASC
+                PARTITION BY `TokenZero`, `TokenOne`, `TickIndex`, `Fee`
+                ORDER BY `sort_key` ASC
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             ),
             0
-        ) as "total_shares"
+        ) as `total_shares`
     FROM spacebox.dex_shares
     -- ensure that duplicates are not summed twice
     FINAL;

@@ -12,10 +12,13 @@ CREATE TABLE spacebox.dex_vaults_shares
     `sort_key`          Tuple(Int64, Int8, Int32, Int32)
                         MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
     -- event data
+    `creator`           String,
     `action`            LowCardinality(String),
     `contract_address`  String,
     -- save boolean for credit/debit
     `credit`            Boolean MATERIALIZED `action` = 'deposit',
+    `token_0_amount`    UInt128, -- amount deposited or withdrawn
+    `token_1_amount`    UInt128, -- amount deposited or withdrawn
     `shares`            UInt128, -- shares delta
     `total_shares`      UInt128, -- total shares
     -- add index for timeseries queries
@@ -69,7 +72,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_deposit_writer TO spacebox.d
 WITH
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
-    event_tuple.2 as `event_attributes`
+    event_tuple.2 as `related_message_event_attributes`,
+    event_tuple.3 as `event_attributes`
 SELECT
     `timestamp`,
     `height`,
@@ -77,8 +81,11 @@ SELECT
     `tx_index`,
     `event_index`,
     -- add event attributes
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'sender'), `related_message_event_attributes`), 'value') AS `creator`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_deposited'), `event_attributes`), 'value')) AS `token_0_amount`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_deposited'), `event_attributes`), 'value')) AS `token_1_amount`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'minted_amount'), `event_attributes`), 'value')) AS `shares`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'total_shares'), `event_attributes`), 'value')) AS `total_shares`
 FROM spacebox.message_event
@@ -91,7 +98,24 @@ ARRAY JOIN (
                     (msg_event_attributes) -> (
                         -- event_tuple.1: event_index
                         toInt32(`msg_events_index_offset` + msg_event_index - 1),
-                        -- event_tuple.2: event_attributes
+                        -- event_tuple.2: related message event attributes
+                        JSONExtractArrayRaw(
+                            arrayFirst(
+                                (msg_event) -> (
+                                    JSONExtractString(msg_event, 'type') = 'message' AND
+                                    arrayExists(
+                                        (attr) -> (
+                                            JSONExtractString(attr, 'key') = 'action' AND
+                                            JSONExtractString(attr, 'value') = '/cosmwasm.wasm.v1.MsgExecuteContract'
+                                        ),
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                    )
+                                ),
+                                `msg_events`
+                            ),
+                            'attributes'
+                        ),
+                        -- event_tuple.3: event_attributes
                         msg_event_attributes
                     ),
                     -- filter to only successful execution events
@@ -182,7 +206,8 @@ ARRAY JOIN (
             )
         )
     )
-) AS `event_tuple`;
+) AS `event_tuple`
+WHERE notEmpty(`creator`);
 
 
 -- spacebox.dex_vaults_shares_withdrawal_writer source
@@ -202,7 +227,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_withdrawal_writer TO spacebo
 WITH
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
-    event_tuple.2 as `event_attributes`
+    event_tuple.2 as `related_message_event_attributes`,
+    event_tuple.3 as `event_attributes`
 SELECT
     `timestamp`,
     `height`,
@@ -210,8 +236,11 @@ SELECT
     `tx_index`,
     `event_index`,
     -- add event attributes
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'sender'), `related_message_event_attributes`), 'value') AS `creator`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'withdraw_amount_0'), `event_attributes`), 'value')) AS `token_0_amount`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'withdraw_amount_1'), `event_attributes`), 'value')) AS `token_1_amount`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'shares_burned'), `event_attributes`), 'value')) AS `shares`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'total_shares'), `event_attributes`), 'value')) AS `total_shares`
 FROM spacebox.message_event
@@ -224,7 +253,24 @@ ARRAY JOIN (
                     (msg_event_attributes) -> (
                         -- event_tuple.1: event_index
                         toInt32(`msg_events_index_offset` + msg_event_index - 1),
-                        -- event_tuple.2: event_attributes
+                        -- event_tuple.2: related message event attributes
+                        JSONExtractArrayRaw(
+                            arrayFirst(
+                                (msg_event) -> (
+                                    JSONExtractString(msg_event, 'type') = 'message' AND
+                                    arrayExists(
+                                        (attr) -> (
+                                            JSONExtractString(attr, 'key') = 'action' AND
+                                            JSONExtractString(attr, 'value') = '/cosmwasm.wasm.v1.MsgExecuteContract'
+                                        ),
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                    )
+                                ),
+                                `msg_events`
+                            ),
+                            'attributes'
+                        ),
+                        -- event_tuple.3: event_attributes
                         msg_event_attributes
                     ),
                     -- filter to only successful execution events
@@ -303,4 +349,5 @@ ARRAY JOIN (
             )
         )
     )
-) AS `event_tuple`;
+) AS `event_tuple`
+WHERE notEmpty(`creator`);

@@ -17,9 +17,12 @@ CREATE TABLE spacebox.dex_vaults_shares
     `contract_address`  String,
     -- save boolean for credit/debit
     `credit`            Boolean MATERIALIZED `action` = 'deposit',
-    `token_0_amount`    UInt128, -- amount deposited or withdrawn
-    `token_1_amount`    UInt128, -- amount deposited or withdrawn
-    `shares`            UInt128, -- shares delta
+    `token_0_deposited` UInt128, -- amount deposited
+    `token_1_deposited` UInt128, -- amount deposited
+    `token_0_withdrawn` UInt128, -- amount withdrawn
+    `token_1_withdrawn` UInt128, -- amount withdrawn
+    `shares_in`         UInt128, -- shares added
+    `shares_out`        UInt128, -- shares removed
     `total_shares`      UInt128, -- total shares
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
@@ -64,9 +67,15 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_deposit_writer TO spacebox.d
     `tx_index`          Int32,
     `event_index`       Int32,
     -- event data
+    `creator`           String,
     `action`            LowCardinality(String),
     `contract_address`  String,
-    `shares`            UInt128,
+    `token_0_deposited` UInt128,
+    `token_1_deposited` UInt128,
+    `token_0_withdrawn` UInt128,
+    `token_1_withdrawn` UInt128,
+    `shares_in`         UInt128,
+    `shares_out`        UInt128,
     `total_shares`      UInt128
 ) AS
 WITH
@@ -84,9 +93,12 @@ SELECT
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'sender'), `related_message_event_attributes`), 'value') AS `creator`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_deposited'), `event_attributes`), 'value')) AS `token_0_amount`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_deposited'), `event_attributes`), 'value')) AS `token_1_amount`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'minted_amount'), `event_attributes`), 'value')) AS `shares`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_deposited'), `event_attributes`), 'value')) AS `token_0_deposited`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_deposited'), `event_attributes`), 'value')) AS `token_1_deposited`,
+    0 AS `token_0_withdrawn`,
+    0 AS `token_1_withdrawn`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'minted_amount'), `event_attributes`), 'value')) AS `shares_in`,
+    0 AS `shares_out`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'total_shares'), `event_attributes`), 'value')) AS `total_shares`
 FROM spacebox.message_event
 ARRAY JOIN (
@@ -219,9 +231,15 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_withdrawal_writer TO spacebo
     `tx_index`          Int32,
     `event_index`       Int32,
     -- event data
+    `creator`           String,
     `action`            LowCardinality(String),
     `contract_address`  String,
-    `shares`            UInt128,
+    `token_0_deposited` UInt128,
+    `token_1_deposited` UInt128,
+    `token_0_withdrawn` UInt128,
+    `token_1_withdrawn` UInt128,
+    `shares_in`         UInt128,
+    `shares_out`        UInt128,
     `total_shares`      UInt128
 ) AS
 WITH
@@ -239,9 +257,12 @@ SELECT
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'sender'), `related_message_event_attributes`), 'value') AS `creator`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'withdraw_amount_0'), `event_attributes`), 'value')) AS `token_0_amount`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'withdraw_amount_1'), `event_attributes`), 'value')) AS `token_1_amount`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'shares_burned'), `event_attributes`), 'value')) AS `shares`,
+    0 AS `token_0_deposited`,
+    0 AS `token_1_deposited`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'withdraw_amount_0'), `event_attributes`), 'value')) AS `token_0_withdrawn`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'withdraw_amount_1'), `event_attributes`), 'value')) AS `token_1_withdrawn`,
+    0 AS `shares_in`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'shares_burned'), `event_attributes`), 'value')) AS `shares_out`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'total_shares'), `event_attributes`), 'value')) AS `total_shares`
 FROM spacebox.message_event
 ARRAY JOIN (

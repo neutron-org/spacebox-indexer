@@ -69,7 +69,7 @@ WITH
                 arrayStringConcat(
                     [
                         -- MsgDeposit
-                        '(?:execute,)?(?:wasm,)?(?:reply,wasm,)*(?:message,)?(?:(?:neutron,)?(?:(?:neutron,)?TickUpdate,|TickUpdate,(?:neutron,)?)?TickUpdate,)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer,(?:message,)?(?:reply,wasm,)?',
+                        '(?:execute,)?(?:wasm,)?(?:reply,wasm,)*(?:message,)?(?:(?:neutron|TickUpdate),)+(?:message,)*(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?coin_received,coinbase,coin_spent,coin_received,transfer,(?:message,)?(?:reply,wasm,)?',
                         -- MsgWithdrawal
                         '(?:execute,)?(?:wasm,)?(?:message,)?(?:(?:neutron,)?TickUpdate,)+(?:message,)*coin_spent,coin_received,transfer,(?:message,)?coin_spent,burn(?:,coin_spent,coin_received,transfer(?:,message)?,neutron)+,',
                         -- MsgPlaceLimitOrder

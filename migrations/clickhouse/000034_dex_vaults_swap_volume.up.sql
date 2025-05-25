@@ -78,7 +78,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_swaps_tick_update_writer TO spacebox.dex_s
             `TickIndex` - `Fee`
         ) as `TickIndex`,
         `Fee`,
-        `TrancheKey`,
+        if(notEmpty(`TrancheKey`), `TrancheKey`, NULL) as `TrancheKey`,
         -- note: a way to think about this is "a swap reduces the existing liquidity"
         --       because a trader has bought from the available liquidity
         if(`TokenIn` = `TokenOne`, `SwapAmountIn`, 0) as `ReservesInZero`,
@@ -126,7 +126,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_swaps_deposit_lp_writer TO spacebox.dex_sw
         `TokenOne`,
         `TickIndex`,
         `Fee`,
-        null as `TrancheKey`,
+        NULL as `TrancheKey`,
         `ReservesZeroSwappedIn` as `ReservesInZero`,
         `ReservesOneSwappedIn` as `ReservesInOne`,
         `ReservesZeroSwappedOut` as `ReservesOutZero`,

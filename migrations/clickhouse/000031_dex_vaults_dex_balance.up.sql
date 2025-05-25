@@ -73,7 +73,8 @@ WITH
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_0_to_1'), `event_attributes`), 'value')) AS `price_ratio`,
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
-    event_tuple.2 as `event_attributes`
+    event_tuple.2 as `event_attributes`,
+    event_tuple.3 as `deposited_tuple`
 SELECT
     `timestamp`,
     `height`,
@@ -83,8 +84,8 @@ SELECT
     -- add event attributes
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_balance'), `event_attributes`), 'value')) AS `token_0_balance`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_balance'), `event_attributes`), 'value')) AS `token_1_balance`,
+    `deposited_tuple`.1 AS `token_0_balance`,
+    `deposited_tuple`.2 AS `token_1_balance`,
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_price'), `event_attributes`), 'value')) AS `token_0_price`,
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_price'), `event_attributes`), 'value')) AS `token_1_price`,
     if(`token_1_price` > 0, `token_0_price` / `token_1_price`, `price_ratio`) AS `price_0_to_1`
@@ -98,7 +99,64 @@ ARRAY JOIN (
                     -- event_tuple.1: event_index
                     toInt32(`msg_events_index_offset` + msg_event_index - 1),
                     -- event_tuple.2: event_attributes
-                    msg_event_attributes
+                    msg_event_attributes,
+                    -- event_tuple.3: related deposited amount
+                    arrayFold(
+                        (deposited_tuple, msg_event) -> (
+                            deposited_tuple.1 + toUInt128OrZero(
+                                JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'ReservesZeroDeposited',
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                    ),
+                                    'value'
+                                )
+                            ),
+                            deposited_tuple.2 + toUInt128OrZero(
+                                JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'ReservesOneDeposited',
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                    ),
+                                    'value'
+                                )
+                            )
+                        ),
+                        arrayFilter(
+                            (msg_event) -> (
+                                JSONExtractString(msg_event, 'type') = 'message' AND
+                                JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'module',
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                    ),
+                                    'value'
+                                ) = 'dex' AND
+                                JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'action',
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                    ),
+                                    'value'
+                                ) = 'DepositLP' AND
+                                JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'Creator',
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                    ),
+                                    'value'
+                                ) = JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
+                                        msg_event_attributes
+                                    ),
+                                    'value'
+                                )
+                            ),
+                            `msg_events`
+                        ),
+                        (toUInt128(0), toUInt128(0))
+                    )
                 ),
                 -- filter to only successful execution events
                 arrayFilter(
@@ -111,6 +169,8 @@ ARRAY JOIN (
                             ),
                             'value'
                         ) = 'dex_deposit' AND
+                        -- note: token_0/1_balance is the sum of all intended deposit AmountIn values
+                        --       it does not account for "swap on deposit" or potential errors (dropped deposit events)
                         -- has token_0_balance
                         arrayExists(
                             (attr) -> JSONExtractString(attr, 'key') = 'token_0_balance',

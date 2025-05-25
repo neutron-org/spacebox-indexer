@@ -31,7 +31,7 @@ CREATE TABLE spacebox.dex_shares
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
-ORDER BY `height`, `block_part_index`, `tx_index`, `event_index`
+ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
 SETTINGS index_granularity = 8192;
 
 -- spacebox.dex_shares_deposit_writer source

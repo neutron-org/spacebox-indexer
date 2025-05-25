@@ -103,7 +103,7 @@ CREATE MATERIALIZED VIEW spacebox.fix_1_applier TO spacebox.dex_message_event_ti
             -- partition by "pools" of reserves (they are separate per tick + fee/tranche combination)
             PARTITION BY `TokenZero`, `TokenOne`, `TokenIn`, `TickIndex`, `Fee`, `TrancheKey`
             -- within the pool index partition, sort by event order
-            ORDER BY `height` ASC, `block_part_index` ASC, `tx_index` ASC, `event_index` ASC
+            ORDER BY `sort_key` ASC
         ) as `PreviousReserves`,
         -- compare this to current row data to get relative state (ReservesDelta)
         (t.`Reserves` - `PreviousReserves`) as `ReservesDelta`

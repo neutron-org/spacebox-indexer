@@ -89,7 +89,7 @@ SELECT
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_price'), `event_attributes`), 'value')) AS `token_0_price`,
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_price'), `event_attributes`), 'value')) AS `token_1_price`,
     if(`token_1_price` > 0, `token_0_price` / `token_1_price`, `price_ratio`) AS `price_0_to_1`
-FROM spacebox.message_event
+FROM spacebox.dex_message_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
@@ -97,7 +97,7 @@ ARRAY JOIN (
             (msg_event, msg_event_index) -> arrayMap(
                 (msg_event_attributes) -> (
                     -- event_tuple.1: event_index
-                    toInt32(`msg_events_index_offset` + msg_event_index - 1),
+                    toInt32(`msg_part_events_index_offset` + msg_event_index - 1),
                     -- event_tuple.2: event_attributes
                     msg_event_attributes,
                     -- event_tuple.3: related deposited amount
@@ -153,7 +153,7 @@ ARRAY JOIN (
                                     'value'
                                 )
                             ),
-                            `msg_events`
+                            `msg_part_events`
                         ),
                         (toUInt128(0), toUInt128(0))
                     )
@@ -197,8 +197,8 @@ ARRAY JOIN (
                 )
             ),
             -- enumerate each (msg_event, msg_event_index) within a message part
-            `msg_events`,
-            arrayEnumerate(`msg_events`)
+            `msg_part_events`,
+            arrayEnumerate(`msg_part_events`)
         )
     )
 ) AS `event_tuple`;
@@ -238,7 +238,7 @@ SELECT
     0 AS `token_0_price`,
     0 AS `token_1_price`,
     0 AS `price_0_to_1`
-FROM spacebox.message_event
+FROM spacebox.dex_message_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
@@ -246,7 +246,7 @@ ARRAY JOIN (
             (msg_event, msg_event_index) -> arrayMap(
                 (msg_event_attributes) -> (
                     -- event_tuple.1: event_index
-                    toInt32(`msg_events_index_offset` + msg_event_index - 1),
+                    toInt32(`msg_part_events_index_offset` + msg_event_index - 1),
                     -- event_tuple.2: event_attributes
                     msg_event_attributes
                 ),
@@ -277,8 +277,8 @@ ARRAY JOIN (
                 )
             ),
             -- enumerate each (msg_event, msg_event_index) within a message part
-            `msg_events`,
-            arrayEnumerate(`msg_events`)
+            `msg_part_events`,
+            arrayEnumerate(`msg_part_events`)
         )
     )
 ) AS `event_tuple`;

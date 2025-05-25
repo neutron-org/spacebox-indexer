@@ -24,25 +24,29 @@ CREATE TABLE spacebox.dex_vaults_shares
     INDEX `contract_address_index` (`contract_address`) TYPE bloom_filter,
     PROJECTION dex_vaults_shares_state (
         SELECT
-            `contract_address`,
+            argMax(`timestamp`, `sort_key`) as `timestamp`,
             argMax(`height`, `sort_key`) as `height`,
-            argMax(`token_0_shares`, `sort_key`) as `token_0_shares`,
-            argMax(`token_1_shares`, `sort_key`) as `token_1_shares`
+            `contract_address`,
+            argMax(`total_shares`, `sort_key`) as `shares`
         GROUP BY `contract_address`
     )
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
 ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
-SETTINGS index_granularity = 8192;
+SETTINGS
+    -- see docs: https://clickhouse.com/docs/operations/settings/merge-tree-settings#deduplicate_merge_projection_mode
+    deduplicate_merge_projection_mode = 'rebuild',
+    index_granularity = 8192;
 
 
 -- spacebox.dex_vaults_shares dex_vaults_shares_state projection view
 
 CREATE VIEW spacebox.dex_vaults_shares_state AS
     SELECT
-        `contract_address`,
+        argMax(`timestamp`, `sort_key`) as `timestamp`,
         argMax(`height`, `sort_key`) as `height`,
+        `contract_address`,
         argMax(`total_shares`, `sort_key`) as `shares`
     FROM spacebox.dex_vaults_shares
     GROUP BY `contract_address`;

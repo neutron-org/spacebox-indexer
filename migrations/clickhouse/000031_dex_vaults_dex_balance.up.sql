@@ -27,11 +27,12 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
     INDEX `contract_address_index` (`contract_address`) TYPE bloom_filter,
     PROJECTION dex_vaults_dex_balance_by_height (
         SELECT
-            `contract_address`,
+            `timestamp`,
             `height`,
+            `contract_address`,
             argMax(`intended_token_0_balance`, `sort_key`) as `intended_token_0_balance`,
             argMax(`intended_token_1_balance`, `sort_key`) as `intended_token_1_balance`
-        GROUP BY `contract_address`, `height`
+        GROUP BY `contract_address`, `timestamp`, `height`
     ),
     PROJECTION dex_vaults_dex_balance_state (
         SELECT
@@ -54,12 +55,13 @@ SETTINGS
 
 CREATE VIEW spacebox.dex_vaults_dex_balance_by_height AS
     SELECT
-        `contract_address`,
+        `timestamp`,
         `height`,
+        `contract_address`,
         argMax(`intended_token_0_balance`, `sort_key`) as `intended_token_0_balance`,
         argMax(`intended_token_1_balance`, `sort_key`) as `intended_token_1_balance`
     FROM spacebox.dex_vaults_dex_balance
-    GROUP BY `contract_address`, `height`;
+    GROUP BY `contract_address`, `timestamp`, `height`;
 
 -- spacebox.dex_vaults_dex_balance dex_vaults_dex_balance_state projection view
 

@@ -1,50 +1,379 @@
 
 -- spacebox.dex_vaults_config_parts table
 
-CREATE TABLE spacebox.dex_vaults_config_tx_event
+CREATE TABLE spacebox.dex_vaults_config_event
 (
     `timestamp`                 DateTime,
     `height`                    Int64,
-    `txhash`                    String,
-    `event_index`               Int16,
-    `signer`                    String,
+    `block_part_index`          Int8,
+    `tx_index`                  Int32,
+    `event_index`               Int32,
+    -- add computed sort key for easier event ordering
+    `sort_key`                  Tuple(Int64, Int8, Int32, Int32)
+                                MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
+    -- event data
+    `attributes`                String,
     `contract_address`          String,
     `action`                    String,
-    `attributes`                String,
-    -- add index for quick joins when finding related configs
-    INDEX `contract_address_index` (`contract_address`) TYPE bloom_filter
+    -- the attributes here attempt to follow the contract types
+    -- link: https://github.com/neutron-org/slinky-vault/blob/a8843298fdf794eacf3667ca9843297072c662d7/contracts/mmvault/src/msg.rs#L30-L56
+    `whitelist`                 Nullable(String), -- JSON of Array(String): often in events as "owner"
+    `token_0_denom`             Nullable(String),
+    `token_1_denom`             Nullable(String),
+    `token_0_symbol`            Nullable(String),
+    `token_1_symbol`            Nullable(String),
+    `token_0_quote_currency`    Nullable(String),
+    `token_1_quote_currency`    Nullable(String),
+    `token_0_decimals`          Nullable(UInt8),
+    `token_1_decimals`          Nullable(UInt8),
+    `token_0_max_blocks_old`    Nullable(UInt64), -- often in events as "max_blocks_stale_token_a"
+    `token_1_max_blocks_old`    Nullable(UInt64), -- often in events as "max_blocks_stale_token_b"
+    `pool_id`                   Nullable(String),
+    `deposit_cap`               Nullable(UInt128),
+    `timestamp_stale`           Nullable(UInt64),
+    `fee_tier_config`           Nullable(String), -- JSON of FeeTiers Array: (fee: u64, percentage: u64)
+    `paused`                    Nullable(Boolean),
+    `skew`                      Nullable(Boolean),
+    `imbalance`                 Nullable(UInt32),
+    `oracle_contract`           Nullable(String),
+    `oracle_price_skew`         Nullable(Int32),
+     -- only set by "create_token" action
+    `denom`                     Nullable(String),
+     -- add projection to get current state quickly
+    PROJECTION dex_vaults_config_state (
+        SELECT
+            argMin(`timestamp`, `sort_key`) as `created_at`,
+            argMax(`timestamp`, `sort_key`) as `updated_at`,
+            argMin(`height`, `sort_key`) as `created_at_height`,
+            argMax(`height`, `sort_key`) as `updated_at_height`,
+            `contract_address`,
+            argMax(`whitelist`, `sort_key`) as `whitelist`,
+            argMax(`token_0_denom`, `sort_key`) as `token_0_denom`,
+            argMax(`token_1_denom`, `sort_key`) as `token_1_denom`,
+            argMax(`token_0_symbol`, `sort_key`) as `token_0_symbol`,
+            argMax(`token_1_symbol`, `sort_key`) as `token_1_symbol`,
+            argMax(`token_0_quote_currency`, `sort_key`) as `token_0_quote_currency`,
+            argMax(`token_1_quote_currency`, `sort_key`) as `token_1_quote_currency`,
+            argMax(`token_0_decimals`, `sort_key`) as `token_0_decimals`,
+            argMax(`token_1_decimals`, `sort_key`) as `token_1_decimals`,
+            argMax(`token_0_max_blocks_old`, `sort_key`) as `token_0_max_blocks_old`,
+            argMax(`token_1_max_blocks_old`, `sort_key`) as `token_1_max_blocks_old`,
+            argMax(`pool_id`, `sort_key`) as `pool_id`,
+            argMax(`deposit_cap`, `sort_key`) as `deposit_cap`,
+            argMax(`timestamp_stale`, `sort_key`) as `timestamp_stale`,
+            argMax(`fee_tier_config`, `sort_key`) as `fee_tier_config`,
+            argMax(`paused`, `sort_key`) as `paused`,
+            argMax(`skew`, `sort_key`) as `skew`,
+            argMax(`imbalance`, `sort_key`) as `imbalance`,
+            argMax(`oracle_contract`, `sort_key`) as `oracle_contract`,
+            argMax(`oracle_price_skew`, `sort_key`) as `oracle_price_skew`,
+            argMax(`denom`, `sort_key`) as `denom`,
+            (
+                `denom` IS NOT NULL AND
+                `token_0_denom` IS NOT NULL AND
+                `token_1_denom` IS NOT NULL AND
+                `fee_tier_config` IS NOT NULL
+            ) as `is_valid`
+        GROUP BY `contract_address`
+    )
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree()
 ORDER BY (
     `height`,
-    `txhash`,
+    `block_part_index`,
+    `tx_index`,
     `event_index`
 )
-SETTINGS index_granularity = 8192;
+SETTINGS
+    -- see docs: https://clickhouse.com/docs/operations/settings/merge-tree-settings#deduplicate_merge_projection_mode
+    deduplicate_merge_projection_mode = 'rebuild',
+    index_granularity = 8192;
 
-CREATE MATERIALIZED VIEW spacebox.dex_vaults_config_tx_event_writer TO spacebox.dex_vaults_config_tx_event (
+
+-- spacebox.dex_vaults_shares dex_vaults_config_state projection view
+
+CREATE VIEW spacebox.dex_vaults_config_state AS
+    SELECT *
+    FROM (
+        SELECT
+            argMin(`timestamp`, `sort_key`) as `created_at`,
+            argMax(`timestamp`, `sort_key`) as `updated_at`,
+            argMin(`height`, `sort_key`) as `created_at_height`,
+            argMax(`height`, `sort_key`) as `updated_at_height`,
+            `contract_address`,
+            argMax(`whitelist`, `sort_key`) as `whitelist`,
+            argMax(`token_0_denom`, `sort_key`) as `token_0_denom`,
+            argMax(`token_1_denom`, `sort_key`) as `token_1_denom`,
+            argMax(`token_0_symbol`, `sort_key`) as `token_0_symbol`,
+            argMax(`token_1_symbol`, `sort_key`) as `token_1_symbol`,
+            argMax(`token_0_quote_currency`, `sort_key`) as `token_0_quote_currency`,
+            argMax(`token_1_quote_currency`, `sort_key`) as `token_1_quote_currency`,
+            argMax(`token_0_decimals`, `sort_key`) as `token_0_decimals`,
+            argMax(`token_1_decimals`, `sort_key`) as `token_1_decimals`,
+            argMax(`token_0_max_blocks_old`, `sort_key`) as `token_0_max_blocks_old`,
+            argMax(`token_1_max_blocks_old`, `sort_key`) as `token_1_max_blocks_old`,
+            argMax(`pool_id`, `sort_key`) as `pool_id`,
+            argMax(`deposit_cap`, `sort_key`) as `deposit_cap`,
+            argMax(`timestamp_stale`, `sort_key`) as `timestamp_stale`,
+            argMax(`fee_tier_config`, `sort_key`) as `fee_tier_config`,
+            argMax(`paused`, `sort_key`) as `paused`,
+            argMax(`skew`, `sort_key`) as `skew`,
+            argMax(`imbalance`, `sort_key`) as `imbalance`,
+            argMax(`oracle_contract`, `sort_key`) as `oracle_contract`,
+            argMax(`oracle_price_skew`, `sort_key`) as `oracle_price_skew`,
+            argMax(`denom`, `sort_key`) as `denom`,
+            (
+                `denom` IS NOT NULL AND
+                `token_0_denom` IS NOT NULL AND
+                `token_1_denom` IS NOT NULL AND
+                `fee_tier_config` IS NOT NULL
+            ) as `is_valid`
+            FROM spacebox.dex_vaults_config_event
+            GROUP BY `contract_address`
+    )
+    WHERE `is_valid` = 1
+    ORDER BY `contract_address` ASC;
+
+
+-- spacebox.dex_vaults_config_event_writer source
+
+CREATE MATERIALIZED VIEW spacebox.dex_vaults_config_event_writer TO spacebox.dex_vaults_config_event (
     `timestamp`                 DateTime,
     `height`                    Int64,
-    `txhash`                    String,
-    `event_index`               Int16 DEFAULT 0,
-    `signer`                    String,
+    `block_part_index`          Int8,
+    `tx_index`                  Int32,
+    `event_index`               Int32,
+    -- event data
+    `attributes`                String,
     `contract_address`          String,
     `action`                    String,
-    `attributes`                String
+    -- the attributes here attempt to follow the contract types
+    -- link: https://github.com/neutron-org/slinky-vault/blob/a8843298fdf794eacf3667ca9843297072c662d7/contracts/mmvault/src/msg.rs#L30-L56
+    `whitelist`                 Nullable(String), -- often in events as "owner"
+    `token_0_denom`             Nullable(String),
+    `token_1_denom`             Nullable(String),
+    `token_0_symbol`            Nullable(String),
+    `token_1_symbol`            Nullable(String),
+    `token_0_quote_currency`    Nullable(String),
+    `token_1_quote_currency`    Nullable(String),
+    `token_0_decimals`          Nullable(UInt8),
+    `token_1_decimals`          Nullable(UInt8),
+    `token_0_max_blocks_old`    Nullable(UInt64), -- often in events as "max_blocks_stale_token_a"
+    `token_1_max_blocks_old`    Nullable(UInt64), -- often in events as "max_blocks_stale_token_b"
+    `pool_id`                   Nullable(String),
+    `deposit_cap`               Nullable(UInt128),
+    `timestamp_stale`           Nullable(UInt64),
+    `fee_tier_config`           Nullable(String), -- JSON of FeeTiers Array: (fee: u64, percentage: u64)
+    `paused`                    Nullable(Boolean),
+    `skew`                      Nullable(Boolean),
+    `imbalance`                 Nullable(UInt32),
+    `oracle_contract`           Nullable(String),
+    `oracle_price_skew`         Nullable(Int32),
+     -- only set by "create_token" action
+    `denom`                     Nullable(String)
 ) AS
+WITH
+    -- define event_tuple parts for row fields
+    event_tuple.1 as `event_index`,
+    event_tuple.2 as `event_attributes`,
+    event_tuple.3 as `attributes`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'owner'), `event_attributes`), 'value') AS `attr_owner`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_denom'), `event_attributes`), 'value') AS `attr_token_0_denom`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_denom'), `event_attributes`), 'value') AS `attr_token_1_denom`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_symbol'), `event_attributes`), 'value') AS `attr_token_0_symbol`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_symbol'), `event_attributes`), 'value') AS `attr_token_1_symbol`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_quote_currency'), `event_attributes`), 'value') AS `attr_token_0_quote_currency`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_quote_currency'), `event_attributes`), 'value') AS `attr_token_1_quote_currency`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_exponent'), `event_attributes`), 'value') AS `attr_token_0_exponent`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_exponent'), `event_attributes`), 'value') AS `attr_token_1_exponent`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_decimals'), `event_attributes`), 'value') AS `attr_token_0_decimals`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_decimals'), `event_attributes`), 'value') AS `attr_token_1_decimals`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_a'), `event_attributes`), 'value') AS `attr_max_blocks_stale_token_a`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_b'), `event_attributes`), 'value') AS `attr_max_blocks_stale_token_b`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_0'), `event_attributes`), 'value') AS `attr_max_blocks_stale_token_0`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_1'), `event_attributes`), 'value') AS `attr_max_blocks_stale_token_1`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'pool_id'), `event_attributes`), 'value') AS `attr_pool_id`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'deposit_cap'), `event_attributes`), 'value') AS `attr_deposit_cap`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'timestamp_stale'), `event_attributes`), 'value') AS `attr_timestamp_stale`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'fee_tier_config'), `event_attributes`), 'value') AS `attr_fee_tier_config`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'paused'), `event_attributes`), 'value') AS `attr_paused`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'skew'), `event_attributes`), 'value') AS `attr_skew`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'imbalance'), `event_attributes`), 'value') AS `attr_imbalance`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'oracle_contract'), `event_attributes`), 'value') AS `attr_oracle_contract`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'oracle_price_skew'), `event_attributes`), 'value') AS `attr_oracle_price_skew`,
+    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'denom'), `event_attributes`), 'value') AS `attr_denom`,
+    extractAll(`attr_owner`, '(?:Addr\(\"(\w+)\"\))') as `attr_owner_array`,
+    arrayMap(
+        (match) -> (toUInt64OrZero(match[1]), toUInt64OrZero(match[2])),
+        extractAllGroupsVertical(`attr_fee_tier_config`, '(?: fee: (\d+), percentage: (\d+))')
+    ) as `attr_fee_tier_array`
 SELECT
     `timestamp`,
     `height`,
-    `txhash`,
+    `block_part_index`,
+    `tx_index`,
     `event_index`,
-    `signer`,
+    -- add event attributes
+    `attributes`,
     `contract_address`,
     `action`,
-    `attributes`
-FROM spacebox.wasm_txs_events
-WHERE `action` in (
-    'instantiate IMM',
-    'update_config',
-    'create_token'
-)
+    if (empty(`attr_owner_array`), NULL, concat('["', arrayStringConcat(`attr_owner_array`, '", "'), '"]')) as `whitelist`,
+    if (empty(`attr_token_0_denom`), NULL, `attr_token_0_denom`) as `token_0_denom`,
+    if (empty(`attr_token_1_denom`), NULL, `attr_token_1_denom`) as `token_1_denom`,
+    if (empty(`attr_token_0_symbol`), NULL, `attr_token_0_symbol`) as `token_0_symbol`,
+    if (empty(`attr_token_1_symbol`), NULL, `attr_token_1_symbol`) as `token_1_symbol`,
+    if (empty(`attr_token_0_quote_currency`), NULL, `attr_token_0_quote_currency`) as `token_0_quote_currency`,
+    if (empty(`attr_token_1_quote_currency`), NULL, `attr_token_1_quote_currency`) as `token_1_quote_currency`,
+    COALESCE(
+        if (
+            empty(`attr_token_0_decimals`),
+            toUInt8OrNull(`attr_token_0_exponent`),
+            toUInt8OrNull(`attr_token_0_decimals`)
+        ),
+        if (
+            empty(`attr_token_0_symbol`),
+            NULL,
+            if (
+                "attr_token_0_symbol" in ('ETH', 'DYDX'),
+                18,
+                if (
+                    "attr_token_0_symbol" = 'BTC',
+                    8,
+                    6
+                )
+            )
+        )
+    ) as `token_0_decimals`,
+    COALESCE(
+        if (
+            empty(`attr_token_1_decimals`),
+            toUInt8OrNull(`attr_token_1_exponent`),
+            toUInt8OrNull(`attr_token_1_decimals`)
+        ),
+        if (
+            empty(`attr_token_1_symbol`),
+            NULL,
+            if (
+                "attr_token_1_symbol" in ('ETH', 'DYDX'),
+                18,
+                if (
+                    "attr_token_1_symbol" = 'BTC',
+                    8,
+                    6
+                )
+            )
+        )
+    ) as `token_1_decimals`,
+    if (
+        empty(`attr_max_blocks_stale_token_0`),
+        toUInt64OrNull(`attr_max_blocks_stale_token_a`),
+        toUInt64OrNull(`attr_max_blocks_stale_token_0`)
+    ) as `token_0_max_blocks_old`,
+    if (
+        empty(`attr_max_blocks_stale_token_1`),
+        toUInt64OrNull(`attr_max_blocks_stale_token_b`),
+        toUInt64OrNull(`attr_max_blocks_stale_token_1`)
+    ) as `token_1_max_blocks_old`,
+    if (empty(`attr_pool_id`), NULL, `attr_pool_id`) as `pool_id`,
+    toUInt128OrNull(`attr_deposit_cap`) as `deposit_cap`,
+    toUInt64OrNull(`attr_timestamp_stale`) as `timestamp_stale`,
+    if (
+        empty(`attr_fee_tier_array`),
+        NULL,
+        concat(
+            '[',
+                arrayStringConcat(
+                    arrayMap(
+                        (tuple) -> concat('{ "fee": ', tuple.1, ', "percentage": ', tuple.2 , ' }'),
+                        `attr_fee_tier_array`
+                    ),
+                    ','
+                ),
+            ']'
+        )
+    ) as `fee_tier_config`,
+    if (`attr_paused` = 'true', true, if(`attr_paused` = 'false', false, NULL)) as `paused`, -- note: toBool() may throw an exception
+    if (`attr_skew` = 'true', true, if(`attr_skew` = 'false', false, NULL)) as `skew`, -- note: toBool() may throw an exception
+    toUInt32OrNull(`attr_imbalance`) as `imbalance`,
+    if (empty(`attr_oracle_contract`), NULL, `attr_oracle_contract`) as `oracle_contract`,
+    toInt32OrNull(`attr_oracle_price_skew`) as `oracle_price_skew`,
+    if (empty(`attr_denom`), NULL, `attr_denom`) as `denom`
+FROM spacebox.message_event
+ARRAY JOIN (
+    -- Extract "message part" events with event_index
+    arrayFlatten(
+        arrayMap(
+            (msg_event, msg_event_index) -> arrayMap(
+                (msg_event_attributes) -> (
+                    -- event_tuple.1: event_index
+                    toInt32(`msg_events_index_offset` + msg_event_index - 1),
+                    -- event_tuple.2: event_attributes
+                    msg_event_attributes,
+                    -- event_tuple.3: event_attributes (string)
+                    JSONExtractString(msg_event, 'attributes')
+                ),
+                -- filter to only successful execution events
+                arrayFilter(
+                    (msg_event_attributes) -> (
+                        -- is action=("instantiate IMM" OR "update_config" OR "create_token")
+                        JSONExtractString(
+                            arrayFirst(
+                                (attr) -> JSONExtractString(attr, 'key') = 'action',
+                                msg_event_attributes
+                            ),
+                            'value'
+                        ) in (
+                            'instantiate IMM',
+                            'update_config',
+                            'create_token'
+                        )
+                    ),
+                    arrayMap(
+                        (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                        arrayFilter(
+                            msg_event -> JSONExtractString(msg_event, 'type') = 'wasm',
+                            [msg_event]
+                        )
+                    )
+                )
+            ),
+            -- enumerate each (msg_event, msg_event_index) within a message part
+            `msg_events`,
+            arrayEnumerate(`msg_events`)
+        )
+    )
+) AS `event_tuple`
+WHERE (
+    -- test for instinstantiate or update with at least one property
+     `action` in ('instantiate IMM', 'update_config') AND (
+        `whitelist` IS NOT NULL OR
+        `token_0_denom` IS NOT NULL OR
+        `token_1_denom` IS NOT NULL OR
+        `token_0_symbol` IS NOT NULL OR
+        `token_1_symbol` IS NOT NULL OR
+        `token_0_quote_currency` IS NOT NULL OR
+        `token_1_quote_currency` IS NOT NULL OR
+        `token_0_decimals` IS NOT NULL OR
+        `token_1_decimals` IS NOT NULL OR
+        `token_0_max_blocks_old` IS NOT NULL OR
+        `token_1_max_blocks_old` IS NOT NULL OR
+        `pool_id` IS NOT NULL OR
+        `deposit_cap` IS NOT NULL OR
+        `oracle_contract` IS NOT NULL OR
+        `imbalance` IS NOT NULL OR
+        `skew` IS NOT NULL OR
+        `timestamp_stale` IS NOT NULL OR
+        `paused` IS NOT NULL OR
+        `fee_tier_config` IS NOT NULL
+     )
+) OR (
+    -- test for create_token with denom
+    `action` = 'create_token' AND
+    notEmpty(`denom`)
+);
+
+-- TODO: also parse contract migration messages
+-- like: https://www.mintscan.io/neutron/tx/1A5DE988F3B2A34D701AED1AB5DB4C36C29F0F30D0DA99051A4DF83C55EA6BB2?sector=message

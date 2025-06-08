@@ -17,12 +17,12 @@ CREATE TABLE spacebox.slinky_prices
     `quote_id`          UInt16,
     PROJECTION slinky_prices_state (
         SELECT
-            argMax(`timestamp`, `timestamp`),
-            argMax(`height`, `timestamp`) as `height`,
+            argMax(`timestamp`, `query_height`) as `timestamp`,
+            argMax(`height`, `query_height`) as `height`,
             `base`,
             `quote`,
-            argMax(`price`, `timestamp`) as `price`,
-            argMax(`decimals`, `timestamp`) as `decimals`
+            argMax(`price`, `query_height`) as `price`,
+            argMax(`decimals`, `query_height`) as `decimals`
         GROUP BY `base`, `quote`
     )
 )
@@ -38,13 +38,13 @@ SETTINGS
 
 CREATE VIEW spacebox.slinky_prices_state AS
     SELECT
-        argMax(`timestamp`, sp.`timestamp`) as `timestamp`,
-        argMax(`height`, sp.`timestamp`) as `height`,
+        argMax(`timestamp`, `query_height`) as `timestamp`,
+        argMax(`height`, `query_height`) as `height`,
         `base`,
         `quote`,
-        argMax(`price`, sp.`timestamp`) as `price`,
-        argMax(`decimals`, sp.`timestamp`) as `decimals`
-    FROM spacebox.slinky_prices as sp
+        argMax(`price`, `query_height`) as `price`,
+        argMax(`decimals`, `query_height`) as `decimals`
+    FROM spacebox.slinky_prices
     GROUP BY `base`, `quote`;
 
 

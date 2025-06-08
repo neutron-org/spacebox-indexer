@@ -24,6 +24,16 @@ CREATE TABLE spacebox.slinky_prices
             argMax(`price`, `query_height`) as `price`,
             argMax(`decimals`, `query_height`) as `decimals`
         GROUP BY `base`, `quote`
+    ),
+    PROJECTION slinky_prices_first_state (
+        SELECT
+            argMin(`timestamp`, `query_height`) as `timestamp`,
+            argMin(`height`, `query_height`) as `height`,
+            `base`,
+            `quote`,
+            argMin(`price`, `query_height`) as `price`,
+            argMin(`decimals`, `query_height`) as `decimals`
+        GROUP BY `base`, `quote`
     )
 )
 ENGINE = ReplacingMergeTree(`query_height`)
@@ -44,6 +54,17 @@ CREATE VIEW spacebox.slinky_prices_state AS
         `quote`,
         argMax(`price`, `query_height`) as `price`,
         argMax(`decimals`, `query_height`) as `decimals`
+    FROM spacebox.slinky_prices
+    GROUP BY `base`, `quote`;
+
+CREATE VIEW spacebox.slinky_prices_first_state AS
+    SELECT
+        argMin(`timestamp`, `query_height`) as `timestamp`,
+        argMin(`height`, `query_height`) as `height`,
+        `base`,
+        `quote`,
+        argMin(`price`, `query_height`) as `price`,
+        argMin(`decimals`, `query_height`) as `decimals`
     FROM spacebox.slinky_prices
     GROUP BY `base`, `quote`;
 

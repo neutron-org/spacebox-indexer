@@ -38,7 +38,12 @@ CREATE TABLE spacebox.dex_vaults_shares_valued
                             toUnixTimestamp64Milli(`price_timestamp_0`) +
                             toUnixTimestamp64Milli(`price_timestamp_1`),
     -- add index for timeseries queries
-    INDEX `timestamp_index` (`timestamp`) TYPE minmax
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax,
+    -- add projection for timeseries queries of each vault
+    PROJECTION dex_vaults_shares_valued_timeseries (
+        SELECT *
+        ORDER BY `contract_address`, `timestamp`
+    )
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
 ENGINE = ReplacingMergeTree(`price_version`)

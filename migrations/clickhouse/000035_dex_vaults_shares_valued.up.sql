@@ -161,7 +161,7 @@ WITH
 -- spacebox.dex_vaults_shares_valued_again_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_valued_again_writer
-REFRESH EVERY 1 MINUTE OFFSET 10 SECOND
+REFRESH EVERY 5 MINUTE OFFSET 10 SECOND
 APPEND
 TO spacebox.dex_vaults_shares_valued (
     `timestamp`         DateTime64(9),
@@ -192,19 +192,22 @@ WITH
     shares as (
         -- get base data of unvalued share rows
         -- find already valued shares to exclude from the update list
-        WITH valued_shares_events AS (
+        WITH old_valued_shares_events AS (
             SELECT `height`, `block_part_index`, `tx_index`, `event_index`
             FROM spacebox.dex_vaults_shares_valued
-            WHERE `price_timestamp_0` > 0
-               OR `price_timestamp_1` > 0
+            -- allow overwriting valuation of new shares several times
+            -- note: this data can be stale if shares or price data failed to
+            --       update for the period of time within this WHERE condition
+            WHERE `timestamp` < addHours(NOW(), -1) AND (
+                `price_timestamp_0` > 0 OR
+                `price_timestamp_1` > 0
+            )
         )
         SELECT *
         FROM spacebox.dex_vaults_shares
-        -- -- note: if shares are not found within this period the query should be
-        -- --       run again including the timestamp in question
         WHERE (`height`, `block_part_index`, `tx_index`, `event_index`) NOT IN (
             SELECT (`height`, `block_part_index`, `tx_index`, `event_index`)
-            FROM valued_shares_events
+            FROM old_valued_shares_events
         )
     ),
     shares_with_high_resolution_timestamp as (

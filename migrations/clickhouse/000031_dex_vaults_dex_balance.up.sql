@@ -116,26 +116,25 @@ SELECT
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_price'), `event_attributes`), 'value')) AS `token_0_price`,
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_price'), `event_attributes`), 'value')) AS `token_1_price`,
     if(`token_1_price` > 0, `token_0_price` / `token_1_price`, `price_ratio`) AS `price_0_to_1`
-FROM spacebox.message_event
+FROM spacebox.dex_message_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
         arrayMap(
-        (deposit_events_attributes) -> arrayMap(
             (msg_event, msg_event_index) -> arrayMap(
                 (msg_event_attributes) -> (
                     -- event_tuple.1: event_index
-                    toInt32(`msg_events_index_offset` + msg_event_index - 1),
+                    toInt32(`msg_part_events_index_offset` + msg_event_index - 1),
                     -- event_tuple.2: event_attributes
                     msg_event_attributes,
                     -- event_tuple.3: related deposited amount
                     arrayFold(
-                        (deposited_tuple, deposit_event_attributes) -> (
+                        (deposited_tuple, msg_event) -> (
                             deposited_tuple.1 + toUInt128OrZero(
                                 JSONExtractString(
                                     arrayFirst(
                                         (attr) -> JSONExtractString(attr, 'key') = 'ReservesZeroDeposited',
-                                        deposit_event_attributes
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
                                     ),
                                     'value'
                                 )
@@ -144,18 +143,33 @@ ARRAY JOIN (
                                 JSONExtractString(
                                     arrayFirst(
                                         (attr) -> JSONExtractString(attr, 'key') = 'ReservesOneDeposited',
-                                        deposit_event_attributes
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
                                     ),
                                     'value'
                                 )
                             )
                         ),
                         arrayFilter(
-                            (deposit_event_attributes) -> (
+                            (msg_event) -> (
+                                JSONExtractString(msg_event, 'type') = 'message' AND
+                                JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'module',
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                    ),
+                                    'value'
+                                ) = 'dex' AND
+                                JSONExtractString(
+                                    arrayFirst(
+                                        (attr) -> JSONExtractString(attr, 'key') = 'action',
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                    ),
+                                    'value'
+                                ) = 'DepositLP' AND
                                 JSONExtractString(
                                     arrayFirst(
                                         (attr) -> JSONExtractString(attr, 'key') = 'Creator',
-                                        deposit_event_attributes
+                                        JSONExtractArrayRaw(msg_event, 'attributes')
                                     ),
                                     'value'
                                 ) = JSONExtractString(
@@ -166,7 +180,7 @@ ARRAY JOIN (
                                     'value'
                                 )
                             ),
-                            deposit_events_attributes
+                            `msg_part_events`
                         ),
                         (toUInt128(0), toUInt128(0))
                     )
@@ -210,46 +224,8 @@ ARRAY JOIN (
                 )
             ),
             -- enumerate each (msg_event, msg_event_index) within a message part
-            `msg_events`,
-            arrayEnumerate(`msg_events`)
-        ),
-        -- precompute msg_events "fields" as arrayMap lambda arguments
-        -- - msg_events "field" msg_events__types
-        arrayMap(
-            (msg_events_array) -> arrayMap(
-                (deposit_event) -> JSONExtractArrayRaw(deposit_event, 'attributes'),
-                arrayFilter(
-                    (msg_event) -> (
-                        JSONExtractString(
-                            arrayFirst(
-                                (attr) -> JSONExtractString(attr, 'key') = 'action',
-                                JSONExtractArrayRaw(msg_event, 'attributes')
-                            ),
-                            'value'
-                        ) = 'DepositLP' AND
-                        JSONExtractString(
-                            arrayFirst(
-                                (attr) -> JSONExtractString(attr, 'key') = 'module',
-                                JSONExtractArrayRaw(msg_event, 'attributes')
-                            ),
-                            'value'
-                        ) = 'dex'
-                    ),
-                    arrayFilter(
-                        (msg_event) -> JSONExtractString(msg_event, 'type') = 'message',
-                        msg_events_array
-                    )
-                )
-            ),
-            arrayFilter(
-                -- filter to only DEX balance messages by testing for "TickUpdate" actions
-                (msg_events_array) -> arrayExists(
-                    (msg_event) -> JSONExtractString(msg_event, 'type') = 'TickUpdate',
-                    msg_events_array
-                ),
-                [`msg_events`]
-            )
-        )
+            `msg_part_events`,
+            arrayEnumerate(`msg_part_events`)
         )
     )
 ) AS `event_tuple`
@@ -297,7 +273,6 @@ SELECT
     0 AS `token_0_price`,
     0 AS `token_1_price`,
     0 AS `price_0_to_1`
--- note: read from dex_message_event as an optimization, don't need all of message_event context
 FROM spacebox.dex_message_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index

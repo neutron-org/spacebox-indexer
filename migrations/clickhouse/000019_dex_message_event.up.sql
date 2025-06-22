@@ -13,15 +13,18 @@ CREATE TABLE spacebox.dex_message_event
     -- event data
     `msg_part_events_index_offset`  Int32,
     `msg_part_events`               Array(String),
-    `msg_part_label`                LowCardinality(String)
+    `msg_part_label`                LowCardinality(String),
+    -- add data skipping index for time queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax
 )
 ENGINE = ReplacingMergeTree
+PARTITION BY toYYYYMM(`timestamp`) -- allow skipping irrelevant months
 ORDER BY (
-    height,
-    block_part_index,
-    tx_index,
-    msg_part_index,
-    wasm_part_index
+    `height`,
+    `block_part_index`,
+    `tx_index`,
+    `msg_part_index`,
+    `wasm_part_index`
 )
 SETTINGS index_granularity = 8192;
 

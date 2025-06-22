@@ -6,9 +6,12 @@ CREATE TABLE spacebox.txs_events
     `event_index` Int16,
     `signer` String,
     `type` String,
-    `attributes` String
+    `attributes` String,
+    -- add data skipping index for time queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax
 )
 ENGINE = ReplacingMergeTree
+PARTITION BY toYYYYMM(`timestamp`) -- allow skipping irrelevant months
 ORDER BY (
  height,
  txhash,

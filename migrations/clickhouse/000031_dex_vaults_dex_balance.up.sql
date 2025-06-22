@@ -30,7 +30,9 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
             `contract_address`,
             argMax(`height`, `sort_key`) as `height`,
             argMax(`token_0_balance`, `sort_key`) as `token_0_balance`,
-            argMax(`token_1_balance`, `sort_key`) as `token_1_balance`
+            argMax(`token_1_balance`, `sort_key`) as `token_1_balance`,
+            argMax(`token_0_balance_before_deposit`, `sort_key`) as `token_0_balance_before_deposit`,
+            argMax(`token_1_balance_before_deposit`, `sort_key`) as `token_1_balance_before_deposit`
         GROUP BY `contract_address`
     )
 )
@@ -49,7 +51,9 @@ CREATE VIEW spacebox.dex_vaults_dex_balance_state AS
         `contract_address`,
         argMax(`height`, `sort_key`) as `height`,
         argMax(`token_0_balance`, `sort_key`) as `token_0_balance`,
-        argMax(`token_1_balance`, `sort_key`) as `token_1_balance`
+        argMax(`token_1_balance`, `sort_key`) as `token_1_balance`,
+        argMax(`token_0_balance_before_deposit`, `sort_key`) as `token_0_balance_before_deposit`,
+        argMax(`token_1_balance_before_deposit`, `sort_key`) as `token_1_balance_before_deposit`
     FROM spacebox.dex_vaults_dex_balance
     GROUP BY `contract_address`;
 

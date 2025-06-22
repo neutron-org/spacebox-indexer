@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: raw_block
+    description: ""
+    columns:
+      - name: height
+        data_type: int64
+        description: ""
+
+      - name: hash
+        data_type: string
+        description: ""
+
+      - name: num_txs
+        data_type: int64
+        description: ""
+
+      - name: total_gas
+        data_type: int64
+        description: ""
+
+      - name: proposer_address
+        data_type: string
+        description: ""
+
+      - name: timestamp
+        data_type: datetime64(9)
+        description: ""
+
+      - name: signatures
+        data_type: string
+        description: ""
+

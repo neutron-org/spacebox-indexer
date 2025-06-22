@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: message_event
+    description: ""
+    columns:
+      - name: timestamp
+        data_type: datetime
+        description: ""
+
+      - name: height
+        data_type: int64
+        description: ""
+
+      - name: block_part_index
+        data_type: int8
+        description: ""
+
+      - name: tx_index
+        data_type: int32
+        description: ""
+
+      - name: msg_part_index
+        data_type: int16
+        description: ""
+
+      - name: msg_indexes
+        data_type: array(int16)
+        description: ""
+
+      - name: msg_events_index_offset
+        data_type: int32
+        description: ""
+
+      - name: msg_events
+        data_type: array(string)
+        description: ""
+

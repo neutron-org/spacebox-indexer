@@ -1,0 +1,4 @@
+# packages.yml
+packages:
+  - package: dbt-labs/codegen
+    version: 0.13.1     # check hub.getdbt.com for the latest

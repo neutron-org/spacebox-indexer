@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: raw_block_results
+    database: spacebox
+    description: ""
+    columns:
+      - name: height
+        data_type: int64
+        description: ""
+
+      - name: txs_results
+        data_type: string
+        description: ""
+
+      - name: finalize_block_events
+        data_type: string
+        description: ""
+
+      - name: validator_updates
+        data_type: string
+        description: ""
+
+      - name: consensus_param_updates
+        data_type: string
+        description: ""
+
+      - name: timestamp
+        data_type: datetime64(9)
+        description: ""
+

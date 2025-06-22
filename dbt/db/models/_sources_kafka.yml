@@ -1,0 +1,13 @@
+# models/_sources_kafka.yml
+version: 2
+
+sources:
+  - name: kafka_pipeline        # logical namespace
+    database: spacebox          # ClickHouse database
+    tables:
+      - name: raw_genesis_topic
+      - name: raw_block_topic
+      - name: raw_block_results_topic
+      - name: raw_transaction_topic
+      - name: raw_slinky_prices_topic
+      - name: raw_dex_pool_metadata_topic

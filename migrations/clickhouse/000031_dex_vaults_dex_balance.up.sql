@@ -16,8 +16,8 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
     `contract_address`  String,
     `token_0_balance`   UInt128,
     `token_1_balance`   UInt128,
-    `intended_token_0_balance`   UInt128,
-    `intended_token_1_balance`   UInt128,
+    `token_0_balance_before_deposit`   UInt128,
+    `token_1_balance_before_deposit`   UInt128,
     `token_0_price`     Float32,
     `token_1_price`     Float32,
     `price_0_to_1`      Float32,
@@ -30,8 +30,8 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
             `timestamp`,
             `height`,
             `contract_address`,
-            argMax(`intended_token_0_balance`, `sort_key`) as `intended_token_0_balance`,
-            argMax(`intended_token_1_balance`, `sort_key`) as `intended_token_1_balance`
+            argMax(`token_0_balance_before_deposit`, `sort_key`) as `token_0_balance_before_deposit`,
+            argMax(`token_1_balance_before_deposit`, `sort_key`) as `token_1_balance_before_deposit`
         GROUP BY `contract_address`, `timestamp`, `height`
     ),
     PROJECTION dex_vaults_dex_balance_state (
@@ -58,8 +58,8 @@ CREATE VIEW spacebox.dex_vaults_dex_balance_by_height AS
         `timestamp`,
         `height`,
         `contract_address`,
-        argMax(`intended_token_0_balance`, `sort_key`) as `intended_token_0_balance`,
-        argMax(`intended_token_1_balance`, `sort_key`) as `intended_token_1_balance`
+        argMax(`token_0_balance_before_deposit`, `sort_key`) as `token_0_balance_before_deposit`,
+        argMax(`token_1_balance_before_deposit`, `sort_key`) as `token_1_balance_before_deposit`
     FROM spacebox.dex_vaults_dex_balance
     GROUP BY `contract_address`, `timestamp`, `height`;
 
@@ -88,8 +88,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_deposit_writer TO space
     `contract_address`  String,
     `token_0_balance`   UInt128,
     `token_1_balance`   UInt128,
-    `intended_token_0_balance`   UInt128,
-    `intended_token_1_balance`   UInt128,
+    `token_0_balance_before_deposit`   UInt128,
+    `token_1_balance_before_deposit`   UInt128,
     `token_0_price`     Float32,
     `token_1_price`     Float32,
     `price_0_to_1`      Float32
@@ -111,8 +111,8 @@ SELECT
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
     `deposited_tuple`.1 AS `token_0_balance`,
     `deposited_tuple`.2 AS `token_1_balance`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_balance'), `event_attributes`), 'value')) AS `intended_token_0_balance`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_balance'), `event_attributes`), 'value')) AS `intended_token_1_balance`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_balance'), `event_attributes`), 'value')) AS `token_0_balance_before_deposit`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_balance'), `event_attributes`), 'value')) AS `token_1_balance_before_deposit`,
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_0'), `event_attributes`), 'value')) AS `token_0_price`,
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_1'), `event_attributes`), 'value')) AS `token_1_price`,
     if(`token_1_price` > 0, `token_0_price` / `token_1_price`, `price_ratio`) AS `price_0_to_1`
@@ -247,8 +247,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_withdrawal_writer TO sp
     `contract_address`  String,
     `token_0_balance`   UInt128,
     `token_1_balance`   UInt128,
-    `intended_token_0_balance`   UInt128,
-    `intended_token_1_balance`   UInt128,
+    `token_0_balance_before_deposit`   UInt128,
+    `token_1_balance_before_deposit`   UInt128,
     `token_0_price`     Float32,
     `token_1_price`     Float32,
     `price_0_to_1`      Float32
@@ -268,8 +268,8 @@ SELECT
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
     0 AS `token_0_balance`,
     0 AS `token_1_balance`,
-    0 AS `intended_token_0_balance`,
-    0 AS `intended_token_1_balance`,
+    0 AS `token_0_balance_before_deposit`,
+    0 AS `token_1_balance_before_deposit`,
     0 AS `token_0_price`,
     0 AS `token_1_price`,
     0 AS `price_0_to_1`

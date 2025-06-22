@@ -1,0 +1,61 @@
+// For format details, see https://aka.ms/devcontainer.json.
+{
+  "name": "Spacebox DBT Container",
+  "build": {
+    "dockerfile": "./Dockerfile"
+  },
+  "runArgs": [
+    // standard Devcontainer things
+    "--cap-add=SYS_PTRACE",
+    "--security-opt",
+    "seccomp=unconfined"
+  ],
+  "containerEnv": {
+    "DBT_PROFILES_DIR": "${containerWorkspaceFolder}/dbt/config"
+  },
+
+  // Configure tool-specific properties.
+  "customizations": {
+    // Configure properties specific to VS Code.
+    "vscode": {
+      // Add the IDs of extensions you want installed when the container is created.
+      "extensions": [
+        // "qufiwefefwoyn.inline-sql-syntax",
+        "innoverio.vscode-dbt-power-user"
+      ],
+
+      // Set *default* container specific settings.json values on container create.
+      "settings": {
+        // settings that any sane developer would set
+        "editor.tabSize": 2,
+        // settings for DBT extension
+        "dbt.dbtIntegration": "core",
+        "dbt.allowListFolders": ["dbt"],
+        "python.interpreter.infoVisibility": "always",
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "files.associations": {
+          "*.sql": "jinja-sql",
+          "*.yml": "jinja-yaml"
+        }
+      }
+    }
+  },
+
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  "forwardPorts": [8080],
+
+  // pass git through and set any other terminals as preferred
+  "features": {
+    "git": "os-provided"
+    // optional features: these increase to post-Dockerfile setup time
+    // "fish": "latest",
+    // "rust": "1.61.0"
+  }
+
+  // "workspaceMount": "source=${localWorkspaceFolder},target=/usr/app/dbt,type=bind,consistency=cached",
+  // "workspaceFolder": "/usr/app/dbt/dbt"
+
+  // "initializeCommand": "touch .env.local",
+  // "postCreateCommand": "",
+  // "postStartCommand": "",
+}

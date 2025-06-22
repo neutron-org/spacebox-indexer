@@ -1,6 +1,6 @@
 CREATE TABLE spacebox.txs_events
 (
-    `timestamp` DateTime,
+    `timestamp` DateTime64(9),
     `height` Int64,
     `txhash` String,
     `event_index` Int16,
@@ -23,7 +23,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.txs_events_writer TO spacebox.txs_events
 (
-    `timestamp` DateTime,
+    `timestamp` DateTime64(9),
     `height` Int64,
     `txhash` String,
     `event_index` Int16,
@@ -32,7 +32,7 @@ CREATE MATERIALIZED VIEW spacebox.txs_events_writer TO spacebox.txs_events
     `attributes` String
 ) AS
 SELECT
-    toDateTime(`timestamp`) as `timestamp`,
+    `timestamp`,
     `height`,
     `txhash`,
     `event_index`,
@@ -48,7 +48,7 @@ ARRAY JOIN (JSONExtractArrayRaw(`events`)) as `event`,
 
 CREATE TABLE spacebox.wasm_txs_events
 (
-    `timestamp` DateTime,
+    `timestamp` DateTime64(9),
     `height` Int64,
     `txhash` String,
     `event_index` Int16,
@@ -69,7 +69,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.wasm_txs_events_writer TO spacebox.wasm_txs_events
 (
-    `timestamp` DateTime,
+    `timestamp` DateTime64(9),
     `height` Int64,
     `txhash` String,
     `event_index` Int16,

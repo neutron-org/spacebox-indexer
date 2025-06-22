@@ -3,7 +3,7 @@
 
 CREATE TABLE spacebox.dex_swaps
 (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -42,7 +42,7 @@ SETTINGS index_granularity = 8192;
 -- spacebox.dex_swaps_tick_update_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_swaps_tick_update_writer TO spacebox.dex_swaps (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -94,7 +94,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_swaps_tick_update_writer TO spacebox.dex_s
 -- spacebox.dex_swaps_deposit_lp_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_swaps_deposit_lp_writer TO spacebox.dex_swaps (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,

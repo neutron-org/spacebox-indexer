@@ -3,7 +3,7 @@
 
 CREATE TABLE spacebox.dex_vaults_dex_balance
 (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -61,7 +61,7 @@ CREATE VIEW spacebox.dex_vaults_dex_balance_state AS
 -- spacebox.dex_vaults_dex_balance_deposit_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_deposit_writer TO spacebox.dex_vaults_dex_balance (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -220,7 +220,7 @@ SETTINGS
 -- spacebox.dex_vaults_dex_balance_withdrawal_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_withdrawal_writer TO spacebox.dex_vaults_dex_balance (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,

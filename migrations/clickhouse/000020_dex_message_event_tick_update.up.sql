@@ -3,7 +3,7 @@
 
 CREATE TABLE spacebox.dex_message_event_tick_update
 (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -50,7 +50,7 @@ SETTINGS index_granularity = 8192;
 -- spacebox.dex_message_event_tick_update_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spacebox.dex_message_event_tick_update (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -280,7 +280,7 @@ SETTINGS
 
 CREATE TABLE spacebox.dex_message_event_tick_state
 (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -320,7 +320,7 @@ SETTINGS index_granularity = 8192;
 -- spacebox.dex_message_event_tick_state_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_state_writer TO spacebox.dex_message_event_tick_state (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,

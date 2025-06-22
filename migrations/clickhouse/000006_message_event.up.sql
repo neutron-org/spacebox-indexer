@@ -1,7 +1,7 @@
 
 CREATE TABLE spacebox.message_event
 (
-    `timestamp` DateTime,
+    `timestamp` DateTime64(9),
     `height` Int64,
     `block_part_index` Int8,
     `tx_index` Int32,
@@ -28,7 +28,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.message_event_txs_writer TO spacebox.message_event
 (
-    `timestamp` DateTime,
+    `timestamp` DateTime64(9),
     `height` Int64,
     `block_part_index` Int8,
     `tx_index` Int32,
@@ -166,7 +166,7 @@ SETTINGS
 
 CREATE MATERIALIZED VIEW spacebox.message_event_block_writer TO spacebox.message_event
 (
-    `timestamp` DateTime,
+    `timestamp` DateTime64(9),
     `height` Int64,
     `block_part_index` Int8,
     `tx_index` Int32,

@@ -208,26 +208,8 @@ WITH
                 `price_timestamp_1` > 0
             )
         )
-        SELECT *
-        FROM spacebox.dex_vaults_shares
-        WHERE (`height`, `block_part_index`, `tx_index`, `event_index`) NOT IN (
-            SELECT (`height`, `block_part_index`, `tx_index`, `event_index`)
-            FROM old_valued_shares_events
-        )
-    ),
-    shares_with_high_resolution_timestamp as (
-        -- get shares data (with high-resolution timestamp)
-        -- TODO: just have 64bit timestamps on all tables instead
-        WITH block_times_subquery AS (
-            SELECT `height`, `timestamp`
-            FROM spacebox.raw_block_txhash
-            WHERE `height` >= (
-                SELECT min(`height`)
-                FROM shares
-            )
-        )
         SELECT
-            if(b.`timestamp` > 0, b.`timestamp`, s.`timestamp`) as `timestamp`,
+            `timestamp`,
             `height`,
             `block_part_index`,
             `tx_index`,
@@ -243,9 +225,11 @@ WITH
             `shares_in`,
             `shares_out`,
             `total_shares`
-        FROM shares as s
-        ANY LEFT JOIN block_times_subquery as b
-            on (b.`height` = s.`height`)
+        FROM spacebox.dex_vaults_shares
+        WHERE (`height`, `block_part_index`, `tx_index`, `event_index`) NOT IN (
+            SELECT (`height`, `block_part_index`, `tx_index`, `event_index`)
+            FROM old_valued_shares_events
+        )
     ),
     shares_with_token_config as (
         SELECT
@@ -256,7 +240,7 @@ WITH
             c.`token_1_decimals` as `token_1_decimals`,
             c.`token_0_symbol` as `token_0_symbol`,
             c.`token_1_symbol` as `token_1_symbol`
-        FROM shares_with_high_resolution_timestamp as s
+        FROM shares as s
         ANY LEFT JOIN spacebox.dex_vaults_config_state as c
             on s.`contract_address` = c.`contract_address`
     ),

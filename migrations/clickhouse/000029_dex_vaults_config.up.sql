@@ -3,7 +3,7 @@
 
 CREATE TABLE spacebox.dex_vaults_config_event
 (
-    `timestamp`                 DateTime,
+    `timestamp`                 DateTime64(9),
     `height`                    Int64,
     `block_part_index`          Int8,
     `tx_index`                  Int32,
@@ -139,7 +139,7 @@ CREATE VIEW spacebox.dex_vaults_config_state AS
 -- spacebox.dex_vaults_config_event_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_vaults_config_event_writer TO spacebox.dex_vaults_config_event (
-    `timestamp`                 DateTime,
+    `timestamp`                 DateTime64(9),
     `height`                    Int64,
     `block_part_index`          Int8,
     `tx_index`                  Int32,

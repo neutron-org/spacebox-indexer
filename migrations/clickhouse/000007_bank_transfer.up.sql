@@ -3,7 +3,7 @@
 
 CREATE TABLE spacebox.bank_transfer
 (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -123,7 +123,7 @@ CREATE VIEW spacebox.bank_transfer_state AS
 -- spacebox.bank_transfer_writer source
 
 CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -144,7 +144,7 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
         event_tuple.4 as `event_coins`,
         event_tuple.5 as `event_coins_index`
     SELECT
-        toDateTime(`timestamp`) as `timestamp`,
+        `timestamp`,
         `height`,
         `block_part_index`,
         `tx_index`,

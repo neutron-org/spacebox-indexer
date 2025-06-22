@@ -5,7 +5,7 @@
 --       because pool shares can be transferred, bank transfers are the real source of truth
 CREATE TABLE spacebox.dex_shares_by_pool_agg
 (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -47,7 +47,7 @@ SETTINGS index_granularity = 8192;
 CREATE MATERIALIZED VIEW spacebox.dex_shares_by_pool_agg_writer
 REFRESH EVERY 10 MINUTE OFFSET 1 MINUTE
 TO spacebox.dex_shares_by_pool_agg (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,

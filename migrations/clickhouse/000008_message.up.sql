@@ -4,7 +4,7 @@
 
 CREATE TABLE spacebox.message
 (
-    `timestamp` DateTime,
+    `timestamp` DateTime64(9),
     `height` Int64,
     `txhash` String,
     `message_index` Int16,
@@ -24,7 +24,7 @@ SETTINGS index_granularity = 8192;
 
 CREATE MATERIALIZED VIEW spacebox.message_writer TO spacebox.message
 (
-    `timestamp` DateTime,
+    `timestamp` DateTime64(9),
     `height` Int64,
     `txhash` String,
     `message_index` Int16,
@@ -36,7 +36,7 @@ SELECT *
 FROM
 (
     SELECT
-        toDateTime(`timestamp`) as `timestamp`,
+        `timestamp`,
         height,
         txhash,
         arrayJoin(

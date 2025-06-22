@@ -3,7 +3,7 @@
 
 CREATE TABLE spacebox.dex_shares
 (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -37,7 +37,7 @@ SETTINGS index_granularity = 8192;
 -- spacebox.dex_shares_deposit_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_shares_deposit_writer TO spacebox.dex_shares (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,
@@ -190,7 +190,7 @@ SETTINGS
 -- spacebox.dex_shares_withdrawal_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_shares_withdrawal_writer TO spacebox.dex_shares (
-    `timestamp`         DateTime,
+    `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
     `tx_index`          Int32,

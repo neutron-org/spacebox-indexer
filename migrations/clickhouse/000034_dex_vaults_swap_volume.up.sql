@@ -24,8 +24,6 @@ CREATE TABLE spacebox.dex_swaps
     `ReservesInOne`     UInt256,
     `ReservesOutZero`   UInt256,
     `ReservesOutOne`    UInt256,
-    -- aggregation state information
-    `updated_at`        DateTime MATERIALIZED nowInBlock(),
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for height timeseries queries

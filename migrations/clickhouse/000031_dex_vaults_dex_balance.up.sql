@@ -25,15 +25,6 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for contract_address type queries
     INDEX `contract_address_index` (`contract_address`) TYPE bloom_filter,
-    PROJECTION dex_vaults_dex_balance_by_height (
-        SELECT
-            `timestamp`,
-            `height`,
-            `contract_address`,
-            argMax(`token_0_balance_before_deposit`, `sort_key`) as `token_0_balance_before_deposit`,
-            argMax(`token_1_balance_before_deposit`, `sort_key`) as `token_1_balance_before_deposit`
-        GROUP BY `contract_address`, `timestamp`, `height`
-    ),
     PROJECTION dex_vaults_dex_balance_state (
         SELECT
             `contract_address`,
@@ -50,18 +41,6 @@ SETTINGS
     deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
-
--- spacebox.dex_vaults_dex_balance dex_vaults_dex_balance_by_height projection view
-
-CREATE VIEW spacebox.dex_vaults_dex_balance_by_height AS
-    SELECT
-        `timestamp`,
-        `height`,
-        `contract_address`,
-        argMax(`token_0_balance_before_deposit`, `sort_key`) as `token_0_balance_before_deposit`,
-        argMax(`token_1_balance_before_deposit`, `sort_key`) as `token_1_balance_before_deposit`
-    FROM spacebox.dex_vaults_dex_balance
-    GROUP BY `contract_address`, `timestamp`, `height`;
 
 -- spacebox.dex_vaults_dex_balance dex_vaults_dex_balance_state projection view
 

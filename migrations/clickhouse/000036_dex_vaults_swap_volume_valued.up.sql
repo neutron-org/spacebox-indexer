@@ -81,20 +81,8 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_swaps_valued_writer TO space
     `value_out_1`       Float64, -- should be equal to ~(value_in_0 - value_fee_0)
 ) AS
 WITH
-    source AS (
-        SELECT *
-        FROM spacebox.dex_swaps
-        WHERE notEmpty("Receiver") OR (
-            ("TrancheKey" IS NULL) AND (
-                -- temp estimation of vault DEX pools by excluding normal DEX users
-                ("Fee" NOT IN (1, 5, 10, 20, 50, 100, 150, 200)) OR
-                ("block_part_index" = 1)
-            )
-        )
-    ),
-    vault_config AS (
-        SELECT * FROM spacebox.dex_vaults_config_state
-    ),
+    source AS (SELECT * FROM spacebox.dex_swaps),
+    vault_config AS (SELECT * FROM spacebox.dex_vaults_config_state),
     vault_denom_price_ids AS (
         SELECT
             "token_0_denom",
@@ -220,7 +208,7 @@ TO spacebox.dex_swaps_valued (
     `value_out_1`       Float64, -- should be equal to ~(value_in_0 - value_fee_0)
 ) AS
 WITH
-    swaps as (
+    source as (
         -- get recently valued rows of unsure price times
         SELECT
           `timestamp`,
@@ -249,20 +237,7 @@ WITH
             OR `price_timestamp_0` = 0
             OR `price_timestamp_1` = 0
     ),
-    source AS (
-        SELECT *
-        FROM swaps
-        WHERE notEmpty("Receiver") OR (
-            ("TrancheKey" IS NULL) AND (
-                -- temp estimation of vault DEX pools by excluding normal DEX users
-                ("Fee" NOT IN (1, 5, 10, 20, 50, 100, 150, 200)) OR
-                ("block_part_index" = 1)
-            )
-        )
-    ),
-    vault_config AS (
-        SELECT * FROM spacebox.dex_vaults_config_state
-    ),
+    vault_config AS (SELECT * FROM spacebox.dex_vaults_config_state),
     vault_with_price_id AS (
         SELECT s.*, p_0."id" as "price_id_0", p_1."id" as "price_id_1"
         FROM vault_config as s

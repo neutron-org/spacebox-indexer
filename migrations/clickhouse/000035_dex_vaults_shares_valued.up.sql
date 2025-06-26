@@ -33,10 +33,15 @@ CREATE TABLE spacebox.dex_vaults_shares_valued
     `value_withdrawn`   Float64,
     `hold_equivalent_0` Float64,
     `hold_equivalent_1` Float64,
+    `balance_timestamp` DateTime64(9),
+    `token_0_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
+    `token_1_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
+    `value_close`       Float64, -- value held in vault (after deposit/withdrawal)
     -- determine most recent version by the recentness of the price data
-    `price_version`     UInt64 MATERIALIZED
+    `timestamp_version`     UInt64 MATERIALIZED
                             toUnixTimestamp64Milli(`price_timestamp_0`) +
-                            toUnixTimestamp64Milli(`price_timestamp_1`),
+                            toUnixTimestamp64Milli(`price_timestamp_1`) +
+                            toUnixTimestamp64Milli(`balance_timestamp`),
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add projection for timeseries queries of each vault
@@ -46,7 +51,7 @@ CREATE TABLE spacebox.dex_vaults_shares_valued
     )
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
-ENGINE = ReplacingMergeTree(`price_version`)
+ENGINE = ReplacingMergeTree(`timestamp_version`)
 ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
 SETTINGS
     -- see docs: https://clickhouse.com/docs/operations/settings/merge-tree-settings#deduplicate_merge_projection_mode
@@ -79,7 +84,11 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_vaults_shares_valued_writer 
     `value_deposited`   Float64,
     `value_withdrawn`   Float64,
     `hold_equivalent_0` Float64,
-    `hold_equivalent_1` Float64
+    `hold_equivalent_1` Float64,
+    `balance_timestamp` DateTime64(9),
+    `token_0_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
+    `token_1_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
+    `value_close`       Float64  -- value held in vault (after deposit/withdrawal)
 ) AS
 WITH
     shares as (
@@ -102,7 +111,7 @@ WITH
             `total_shares`
         FROM spacebox.dex_vaults_shares
     ),
-    shares_with_token_config as (
+    shares_with_token_config_and_balance as (
         SELECT
             s.*,
             c.`token_0_denom` as `token_0_denom`,
@@ -110,10 +119,14 @@ WITH
             c.`token_0_decimals` as `token_0_decimals`,
             c.`token_1_decimals` as `token_1_decimals`,
             c.`token_0_symbol` as `token_0_symbol`,
-            c.`token_1_symbol` as `token_1_symbol`
+            c.`token_1_symbol` as `token_1_symbol`,
+            b.`token_0_balance_before_deposit` as `token_0_balance`,
+            b.`token_1_balance_before_deposit` as `token_1_balance`
         FROM shares as s
         ANY LEFT JOIN spacebox.dex_vaults_config_state as c
             on s.`contract_address` = c.`contract_address`
+        ANY LEFT JOIN spacebox.dex_vaults_dex_balance_state as b
+            on s.`contract_address` = b.`contract_address`
     ),
     shares_valued AS (
         WITH
@@ -152,8 +165,13 @@ WITH
             toFloat64(`token_0_withdrawn`) * "token_price_0" +
             toFloat64(`token_1_withdrawn`) * "token_price_1" as `value_withdrawn`,
             ("value_deposited" - "value_withdrawn") / 2 / "token_price_0" as "hold_equivalent_0",
-            ("value_deposited" - "value_withdrawn") / 2 / "token_price_1" as "hold_equivalent_1"
-        FROM shares_with_token_config as s
+            ("value_deposited" - "value_withdrawn") / 2 / "token_price_1" as "hold_equivalent_1",
+            0 as `balance_timestamp`,
+            s.`token_0_balance` + `token_0_deposited` - `token_0_withdrawn` as "token_0_balance",
+            s.`token_1_balance` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
+            toFloat64(`token_0_balance`) * "token_price_0" +
+            toFloat64(`token_1_balance`) * "token_price_1" as `value_close`
+        FROM shares_with_token_config_and_balance as s
         ANY LEFT JOIN price_state as p_0
             ON (p_0.`base` = s.`token_0_symbol`)
         ANY LEFT JOIN price_state as p_1
@@ -191,7 +209,11 @@ TO spacebox.dex_vaults_shares_valued (
     `value_deposited`   Float64,
     `value_withdrawn`   Float64,
     `hold_equivalent_0` Float64,
-    `hold_equivalent_1` Float64
+    `hold_equivalent_1` Float64,
+    `balance_timestamp` DateTime64(9),
+    `token_0_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
+    `token_1_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
+    `value_close`       Float64  -- value held in vault (after deposit/withdrawal)
 ) AS
 WITH
     shares as (
@@ -357,7 +379,12 @@ WITH
             toFloat64(`token_0_withdrawn`) * "token_price_0" +
             toFloat64(`token_1_withdrawn`) * "token_price_1" as `value_withdrawn`,
             ("value_deposited" - "value_withdrawn") / 2 / "token_price_0" as "hold_equivalent_0",
-            ("value_deposited" - "value_withdrawn") / 2 / "token_price_1" as "hold_equivalent_1"
+            ("value_deposited" - "value_withdrawn") / 2 / "token_price_1" as "hold_equivalent_1",
+            b.`timestamp` as `balance_timestamp`,
+            b.`token_0_balance_before_deposit` + `token_0_deposited` - `token_0_withdrawn` as "token_0_balance",
+            b.`token_1_balance_before_deposit` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
+            greatest(toFloat64(`token_0_balance`) * "token_price_0" +
+            toFloat64(`token_1_balance`) * "token_price_1", 0) as `value_close`
         FROM shares_with_prices as s
         ASOF LEFT JOIN (SELECT * FROM spacebox.slinky_prices WHERE `id` IN price_ids_0) as p_0
             ON (p_0.`id` = s.`price_id_0`)
@@ -365,6 +392,9 @@ WITH
         ASOF LEFT JOIN (SELECT * FROM spacebox.slinky_prices WHERE `id` IN price_ids_1) as p_1
             ON (p_1.`id` = s.`price_id_1`)
             AND p_1.`timestamp` <= s.`timestamp`
+        ASOF LEFT JOIN (SELECT * FROM spacebox.dex_vaults_dex_balance WHERE `action` IN 'dex_deposit') as b
+            ON (b.`contract_address` = s.`contract_address`)
+            AND b.`height` <= s.`height`
     )
     SELECT *
     FROM shares_valued;

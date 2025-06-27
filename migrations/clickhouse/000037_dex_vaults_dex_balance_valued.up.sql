@@ -28,6 +28,8 @@ CREATE TABLE spacebox.dex_vaults_dex_balance_valued
     `token_1_balance_value` Float64,
     `token_0_balance_before_deposit_value` Float64,
     `token_1_balance_before_deposit_value` Float64,
+    `token_0_balance_hold_equivalent_amount` Float64,
+    `token_1_balance_hold_equivalent_amount` Float64,
     -- determine most recent version by the recentness of the price data
     `price_version`     UInt64 MATERIALIZED
                             toUnixTimestamp64Milli(`price_timestamp_0`) +
@@ -100,7 +102,9 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_valued_deposit_writer T
     `token_0_balance_value` Float64,
     `token_1_balance_value` Float64,
     `token_0_balance_before_deposit_value` Float64,
-    `token_1_balance_before_deposit_value` Float64
+    `token_1_balance_before_deposit_value` Float64,
+    `token_0_balance_hold_equivalent_amount` Float64,
+    `token_1_balance_hold_equivalent_amount` Float64
 ) AS
 WITH
     source AS (SELECT * FROM spacebox.dex_vaults_dex_balance),
@@ -145,6 +149,10 @@ WITH
             "token_price_1" * toFloat64("token_1_balance") as "token_1_balance_value",
             "token_price_0" * toFloat64("token_0_balance_before_deposit") as "token_0_balance_before_deposit_value",
             "token_price_1" * toFloat64("token_1_balance_before_deposit") as "token_1_balance_before_deposit_value",
+            -- use estimated balance for balance equivalent amount hold amounts
+            "token_0_balance_before_deposit_value" + "token_1_balance_before_deposit_value" as "balance_value",
+            "balance_value" / 2 / "token_price_0" as "token_0_balance_hold_equivalent_amount",
+            "balance_value" / 2 / "token_price_1" as "token_1_balance_hold_equivalent_amount",
             price_state AS (
                 SELECT
                 `base`,
@@ -176,7 +184,9 @@ WITH
             "token_0_balance_value",
             "token_1_balance_value",
             "token_0_balance_before_deposit_value",
-            "token_1_balance_before_deposit_value"
+            "token_1_balance_before_deposit_value",
+            "token_0_balance_hold_equivalent_amount",
+            "token_1_balance_hold_equivalent_amount"
         FROM balances_with_price_ids as s
         ANY LEFT JOIN price_state as p_0
             ON (p_0."base" = s."token_0_symbol")
@@ -213,7 +223,9 @@ TO spacebox.dex_vaults_dex_balance_valued (
     `token_0_balance_value` Float64,
     `token_1_balance_value` Float64,
     `token_0_balance_before_deposit_value` Float64,
-    `token_1_balance_before_deposit_value` Float64
+    `token_1_balance_before_deposit_value` Float64,
+    `token_0_balance_hold_equivalent_amount` Float64,
+    `token_1_balance_hold_equivalent_amount` Float64
 ) AS
 WITH
     source as (
@@ -308,7 +320,11 @@ WITH
             "token_price_0" * toFloat64("token_0_balance") as "token_0_balance_value",
             "token_price_1" * toFloat64("token_1_balance") as "token_1_balance_value",
             "token_price_0" * toFloat64("token_0_balance_before_deposit") as "token_0_balance_before_deposit_value",
-            "token_price_1" * toFloat64("token_1_balance_before_deposit") as "token_1_balance_before_deposit_value"
+            "token_price_1" * toFloat64("token_1_balance_before_deposit") as "token_1_balance_before_deposit_value",
+            -- use estimated balance for balance equivalent amount hold amounts
+            "token_0_balance_before_deposit_value" + "token_1_balance_before_deposit_value" as "balance_value",
+            "balance_value" / 2 / "token_price_0" as "token_0_balance_hold_equivalent_amount",
+            "balance_value" / 2 / "token_price_1" as "token_1_balance_hold_equivalent_amount"
         SELECT
             s."timestamp" as "timestamp",
             s."height" as "height",
@@ -331,7 +347,9 @@ WITH
             "token_0_balance_value",
             "token_1_balance_value",
             "token_0_balance_before_deposit_value",
-            "token_1_balance_before_deposit_value"
+            "token_1_balance_before_deposit_value",
+            "token_0_balance_hold_equivalent_amount",
+            "token_1_balance_hold_equivalent_amount"
         FROM balances_with_price_ids as s
         ASOF JOIN slinky_prices_0 as p_0
             ON (p_0."id" = s."price_id_0")

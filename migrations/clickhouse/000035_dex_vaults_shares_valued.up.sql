@@ -29,6 +29,8 @@ CREATE TABLE spacebox.dex_vaults_shares_valued
     -- price information
     `price_timestamp_0` DateTime64(9),
     `price_timestamp_1` DateTime64(9),
+    `price_0`           Float64,
+    `price_1`           Float64,
     `value_deposited`   Float64,
     `value_withdrawn`   Float64,
     `hold_equivalent_0` Float64,
@@ -81,6 +83,8 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_vaults_shares_valued_writer 
     -- price information
     `price_timestamp_0` DateTime64(9),
     `price_timestamp_1` DateTime64(9),
+    `price_0`           Float64,
+    `price_1`           Float64,
     `value_deposited`   Float64,
     `value_withdrawn`   Float64,
     `hold_equivalent_0` Float64,
@@ -160,6 +164,8 @@ WITH
             -- price information
             0 as `price_timestamp_0`,
             0 as `price_timestamp_1`,
+            "token_price_0" as "price_0",
+            "token_price_1" as "price_1",
             toFloat64(`token_0_deposited`) * "token_price_0" +
             toFloat64(`token_1_deposited`) * "token_price_1" as `value_deposited`,
             toFloat64(`token_0_withdrawn`) * "token_price_0" +
@@ -206,6 +212,8 @@ TO spacebox.dex_vaults_shares_valued (
     -- price information
     `price_timestamp_0` DateTime64(9),
     `price_timestamp_1` DateTime64(9),
+    `price_0`           Float64,
+    `price_1`           Float64,
     `value_deposited`   Float64,
     `value_withdrawn`   Float64,
     `hold_equivalent_0` Float64,
@@ -331,7 +339,7 @@ WITH
                 p_0.`timestamp`> 0,
                 p_0.`price`,
                 s.`first_price_0`
-            ) as `price_0`,
+            ) as `safe_price_0`,
             if(
                 p_0.`timestamp`> 0,
                 p_0.`decimals`,
@@ -346,14 +354,14 @@ WITH
                 p_1.`timestamp`> 0,
                 p_1.`price`,
                 s.`first_price_1`
-            ) as `price_1`,
+            ) as `safe_price_1`,
             if(
                 p_1.`timestamp`> 0,
                 p_1.`decimals`,
                 s.`first_price_decimals_1`
             ) as `price_decimals_1`,
-            toFloat64(`price_0`) * exp10(-("token_0_decimals" + "price_decimals_0")) as "token_price_0",
-            toFloat64(`price_1`) * exp10(-("token_1_decimals" + "price_decimals_1")) as "token_price_1"
+            toFloat64(`safe_price_0`) * exp10(-("token_0_decimals" + "price_decimals_0")) as "token_price_0",
+            toFloat64(`safe_price_1`) * exp10(-("token_1_decimals" + "price_decimals_1")) as "token_price_1"
         SELECT
             s.`timestamp` as `timestamp`,
             s.`height` as `height`,
@@ -374,6 +382,8 @@ WITH
             -- price information
             `price_timestamp_0`,
             `price_timestamp_1`,
+            "token_price_0" as "price_0",
+            "token_price_1" as "price_1",
             toFloat64(`token_0_deposited`) * "token_price_0" +
             toFloat64(`token_1_deposited`) * "token_price_1" as `value_deposited`,
             toFloat64(`token_0_withdrawn`) * "token_price_0" +

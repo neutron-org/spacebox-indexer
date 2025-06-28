@@ -99,7 +99,7 @@ SELECT
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_0'), `event_attributes`), 'value')) AS `token_0_price`,
     toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_1'), `event_attributes`), 'value')) AS `token_1_price`,
     if(`token_1_price` > 0, `token_0_price` / `token_1_price`, `price_ratio`) AS `price_0_to_1`
-FROM spacebox.dex_message_event
+FROM spacebox.message_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
@@ -107,17 +107,17 @@ ARRAY JOIN (
             (msg_event, msg_event_index) -> arrayMap(
                 (msg_event_attributes) -> (
                     -- event_tuple.1: event_index
-                    toInt32(`msg_part_events_index_offset` + msg_event_index - 1),
+                    toInt32(`msg_events_index_offset` + msg_event_index - 1),
                     -- event_tuple.2: event_attributes
                     msg_event_attributes,
                     -- event_tuple.3: related deposited amount
                     arrayFold(
-                        (deposited_tuple, msg_event) -> (
+                        (deposited_tuple, related_message_event_attributes) -> (
                             deposited_tuple.1 + toUInt128OrZero(
                                 JSONExtractString(
                                     arrayFirst(
                                         (attr) -> JSONExtractString(attr, 'key') = 'ReservesZeroDeposited',
-                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                        related_message_event_attributes
                                     ),
                                     'value'
                                 )
@@ -126,33 +126,32 @@ ARRAY JOIN (
                                 JSONExtractString(
                                     arrayFirst(
                                         (attr) -> JSONExtractString(attr, 'key') = 'ReservesOneDeposited',
-                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                        related_message_event_attributes
                                     ),
                                     'value'
                                 )
                             )
                         ),
                         arrayFilter(
-                            (msg_event) -> (
-                                JSONExtractString(msg_event, 'type') = 'message' AND
+                            (related_message_event_attributes) -> (
                                 JSONExtractString(
                                     arrayFirst(
                                         (attr) -> JSONExtractString(attr, 'key') = 'module',
-                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                        related_message_event_attributes
                                     ),
                                     'value'
                                 ) = 'dex' AND
                                 JSONExtractString(
                                     arrayFirst(
                                         (attr) -> JSONExtractString(attr, 'key') = 'action',
-                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                        related_message_event_attributes
                                     ),
                                     'value'
                                 ) = 'DepositLP' AND
                                 JSONExtractString(
                                     arrayFirst(
                                         (attr) -> JSONExtractString(attr, 'key') = 'Creator',
-                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                        related_message_event_attributes
                                     ),
                                     'value'
                                 ) = JSONExtractString(
@@ -163,7 +162,13 @@ ARRAY JOIN (
                                     'value'
                                 )
                             ),
-                            `msg_part_events`
+                            arrayMap(
+                                (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                                arrayFilter(
+                                    msg_event -> JSONExtractString(msg_event, 'type') = 'message',
+                                    `msg_events`
+                                )
+                            )
                         ),
                         (toUInt128(0), toUInt128(0))
                     )
@@ -179,7 +184,8 @@ ARRAY JOIN (
                             ),
                             'value'
                         ) = 'dex_deposit' AND
-                        -- note: token_0/1_balance is the sum of all intended deposit AmountIn values
+                        -- note: token_0/1_balance is the balance of the vault before depositing to the DEX
+                        --       the 'dex_deposit' action may try to deposit all of these tokens however
                         --       it does not account for "swap on deposit" or potential errors (dropped deposit events)
                         -- has token_0_balance
                         arrayExists(
@@ -207,8 +213,8 @@ ARRAY JOIN (
                 )
             ),
             -- enumerate each (msg_event, msg_event_index) within a message part
-            `msg_part_events`,
-            arrayEnumerate(`msg_part_events`)
+            `msg_events`,
+            arrayEnumerate(`msg_events`)
         )
     )
 ) AS `event_tuple`

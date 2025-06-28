@@ -262,7 +262,7 @@ SELECT
     0 AS `token_0_price`,
     0 AS `token_1_price`,
     0 AS `price_0_to_1`
-FROM spacebox.dex_message_event
+FROM spacebox.message_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
@@ -270,7 +270,7 @@ ARRAY JOIN (
             (msg_event, msg_event_index) -> arrayMap(
                 (msg_event_attributes) -> (
                     -- event_tuple.1: event_index
-                    toInt32(`msg_part_events_index_offset` + msg_event_index - 1),
+                    toInt32(`msg_events_index_offset` + msg_event_index - 1),
                     -- event_tuple.2: event_attributes
                     msg_event_attributes
                 ),
@@ -301,8 +301,12 @@ ARRAY JOIN (
                 )
             ),
             -- enumerate each (msg_event, msg_event_index) within a message part
-            `msg_part_events`,
-            arrayEnumerate(`msg_part_events`)
+            `msg_events`,
+            arrayEnumerate(`msg_events`)
         )
     )
-) AS `event_tuple`;
+) AS `event_tuple`
+SETTINGS
+  -- this query can have trouble backfilling with a lot of blocks
+  max_insert_block_size = 10000
+;

@@ -120,8 +120,8 @@ WITH
             c.`token_1_decimals` as `token_1_decimals`,
             c.`token_0_symbol` as `token_0_symbol`,
             c.`token_1_symbol` as `token_1_symbol`,
-            b.`token_0_balance_before_deposit` as `token_0_balance`,
-            b.`token_1_balance_before_deposit` as `token_1_balance`
+            b.`token_0_balance_before_deposit` as `token_0_balance_before_deposit`,
+            b.`token_1_balance_before_deposit` as `token_1_balance_before_deposit`
         FROM shares as s
         ANY LEFT JOIN spacebox.dex_vaults_config_state as c
             on s.`contract_address` = c.`contract_address`
@@ -167,8 +167,8 @@ WITH
             ("value_deposited" - "value_withdrawn") / 2 / "token_price_0" as "hold_equivalent_0",
             ("value_deposited" - "value_withdrawn") / 2 / "token_price_1" as "hold_equivalent_1",
             0 as `balance_timestamp`,
-            s.`token_0_balance` + `token_0_deposited` - `token_0_withdrawn` as "token_0_balance",
-            s.`token_1_balance` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
+            s.`token_0_balance_before_deposit` + `token_0_deposited` - `token_0_withdrawn` as "token_0_balance",
+            s.`token_1_balance_before_deposit` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
             toFloat64(`token_0_balance`) * "token_price_0" +
             toFloat64(`token_1_balance`) * "token_price_1" as `value_close`
         FROM shares_with_token_config_and_balance as s

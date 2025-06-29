@@ -1,7 +1,7 @@
 
--- spacebox.dex_vaults_dex_balance table
+-- spacebox.dex_vaults_dex_transfer table
 
-CREATE TABLE spacebox.dex_vaults_dex_balance
+CREATE TABLE spacebox.dex_vaults_dex_transfer
 (
     `timestamp`         DateTime64(9),
     `height`            Int64,
@@ -14,8 +14,17 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
     -- event data
     `action`            LowCardinality(String),
     `contract_address`  String,
-    `token_0_balance`   UInt128,
-    `token_1_balance`   UInt128,
+    `shares_added`      UInt128,
+    `shares_removed`    UInt128,
+    `shares_total`      UInt128,
+    `token_0_from_user` UInt128,
+    `token_1_from_user` UInt128,
+    `token_0_to_user`   UInt128,
+    `token_1_to_user`   UInt128,
+    `token_0_from_dex`  UInt128,
+    `token_1_from_dex`  UInt128,
+    `token_0_to_dex`    UInt128,
+    `token_1_to_dex`    UInt128,
     `token_0_balance_before_deposit`   UInt128,
     `token_1_balance_before_deposit`   UInt128,
     `token_0_price`     Float32,
@@ -25,14 +34,18 @@ CREATE TABLE spacebox.dex_vaults_dex_balance
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for contract_address type queries
     INDEX `contract_address_index` (`contract_address`) TYPE bloom_filter,
-    PROJECTION dex_vaults_dex_balance_state (
+    PROJECTION dex_vaults_dex_transfer_state (
         SELECT
             `contract_address`,
             argMax(`height`, `sort_key`) as `height`,
-            argMax(`token_0_balance`, `sort_key`) as `token_0_balance`,
-            argMax(`token_1_balance`, `sort_key`) as `token_1_balance`,
-            argMax(`token_0_balance_before_deposit`, `sort_key`) as `token_0_balance_before_deposit`,
-            argMax(`token_1_balance_before_deposit`, `sort_key`) as `token_1_balance_before_deposit`
+            -- note: sums are susceptible to double counting
+            sum(`token_0_from_user` + `token_0_from_dex` - `token_0_to_user` - `token_1_to_dex`) as `token_0_balance`,
+            sum(`token_1_from_user` + `token_1_from_dex` - `token_1_to_user` - `token_1_to_dex`) as `token_1_balance`,
+            argMaxIf(`token_0_balance_before_deposit`, `sort_key`, `action` = 'dex_deposit') as `token_0_balance_before_deposit`,
+            argMaxIf(`token_1_balance_before_deposit`, `sort_key`, `action` = 'dex_deposit') as `token_1_balance_before_deposit`,
+            -- note: sums are susceptible to double counting
+            sum(`shares_added` - `shares_removed`) as `shares_total_estimated`,
+            argMaxIf(`shares_total`, `sort_key`, `shares_added` + `shares_removed` > 0) as `shares_total`
         GROUP BY `contract_address`
     )
 )
@@ -44,23 +57,24 @@ SETTINGS
     index_granularity = 8192;
 
 
--- spacebox.dex_vaults_dex_balance dex_vaults_dex_balance_state projection view
+-- spacebox.dex_vaults_dex_transfer dex_vaults_dex_transfer_state projection view
 
-CREATE VIEW spacebox.dex_vaults_dex_balance_state AS
+CREATE VIEW spacebox.dex_vaults_dex_transfer_state AS
     SELECT
         `contract_address`,
         argMax(`height`, `sort_key`) as `height`,
-        argMax(`token_0_balance`, `sort_key`) as `token_0_balance`,
-        argMax(`token_1_balance`, `sort_key`) as `token_1_balance`,
+        -- note: sums are susceptible to double counting
+        sum(`token_0_from_user` + `token_0_from_dex` - `token_0_to_user` - `token_1_to_dex`) as `token_0_balance`,
+        sum(`token_1_from_user` + `token_1_from_dex` - `token_1_to_user` - `token_1_to_dex`) as `token_1_balance`,
         argMax(`token_0_balance_before_deposit`, `sort_key`) as `token_0_balance_before_deposit`,
         argMax(`token_1_balance_before_deposit`, `sort_key`) as `token_1_balance_before_deposit`
-    FROM spacebox.dex_vaults_dex_balance
+    FROM spacebox.dex_vaults_dex_transfer
     GROUP BY `contract_address`;
 
 
--- spacebox.dex_vaults_dex_balance_deposit_writer source
+-- spacebox.dex_vaults_dex_transfer_dex_deposit_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_deposit_writer TO spacebox.dex_vaults_dex_balance (
+CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_transfer_dex_deposit_writer TO spacebox.dex_vaults_dex_transfer (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -69,8 +83,17 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_deposit_writer TO space
     -- event data
     `action`            LowCardinality(String),
     `contract_address`  String,
-    `token_0_balance`   UInt128,
-    `token_1_balance`   UInt128,
+    `shares_added`      UInt128,
+    `shares_removed`    UInt128,
+    `shares_total`      UInt128,
+    `token_0_from_user` UInt128,
+    `token_1_from_user` UInt128,
+    `token_0_to_user`   UInt128,
+    `token_1_to_user`   UInt128,
+    `token_0_from_dex`  UInt128,
+    `token_1_from_dex`  UInt128,
+    `token_0_to_dex`    UInt128,
+    `token_1_to_dex`    UInt128,
     `token_0_balance_before_deposit`   UInt128,
     `token_1_balance_before_deposit`   UInt128,
     `token_0_price`     Float32,
@@ -78,7 +101,7 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_deposit_writer TO space
     `price_0_to_1`      Float32
 ) AS
 WITH
-    toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_0_to_1'), `event_attributes`), 'value')) AS `price_ratio`,
+    toFloat32OrZero(arrayFirst(attr -> attr.key = 'price_0_to_1', `event_attributes`).value) AS `price_ratio`,
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
     event_tuple.2 as `event_attributes`,
@@ -90,16 +113,25 @@ SELECT
     `tx_index`,
     `event_index`,
     -- add event attributes
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
-    `deposited_tuple`.1 AS `token_0_balance`,
-    `deposited_tuple`.2 AS `token_1_balance`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_balance'), `event_attributes`), 'value')) AS `token_0_balance_before_deposit`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_balance'), `event_attributes`), 'value')) AS `token_1_balance_before_deposit`,
-    toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_0'), `event_attributes`), 'value')) AS `token_0_price`,
-    toFloat32OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'price_1'), `event_attributes`), 'value')) AS `token_1_price`,
+    arrayFirst(attr -> attr.key = 'action', `event_attributes`).value AS `action`,
+    arrayFirst(attr -> attr.key = '_contract_address', `event_attributes`).value AS `contract_address`,
+    0 AS `shares_added`,
+    0 AS `shares_removed`,
+    0 AS `shares_total`,
+    0 AS `token_0_from_user`,
+    0 AS `token_1_from_user`,
+    0 AS `token_0_to_user`,
+    0 AS `token_1_to_user`,
+    0 AS `token_0_from_dex`,
+    0 AS `token_1_from_dex`,
+    `deposited_tuple`.1 AS `token_0_to_dex`,
+    `deposited_tuple`.2 AS `token_1_to_dex`,
+    toUInt128OrZero(arrayFirst(attr -> attr.key = 'token_0_balance', `event_attributes`).value) AS `token_0_balance_before_deposit`,
+    toUInt128OrZero(arrayFirst(attr -> attr.key = 'token_1_balance', `event_attributes`).value) AS `token_1_balance_before_deposit`,
+    toFloat32OrZero(arrayFirst(attr -> attr.key = 'price_0', `event_attributes`).value) AS `token_0_price`,
+    toFloat32OrZero(arrayFirst(attr -> attr.key = 'price_1', `event_attributes`).value) AS `token_1_price`,
     if(`token_1_price` > 0, `token_0_price` / `token_1_price`, `price_ratio`) AS `price_0_to_1`
-FROM spacebox.message_event
+FROM spacebox.parsed_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
@@ -114,58 +146,52 @@ ARRAY JOIN (
                     arrayFold(
                         (deposited_tuple, related_message_event_attributes) -> (
                             deposited_tuple.1 + toUInt128OrZero(
-                                JSONExtractString(
+                                (
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'ReservesZeroDeposited',
+                                        (attr) -> attr.key = 'ReservesZeroDeposited',
                                         related_message_event_attributes
-                                    ),
-                                    'value'
+                                    ).value
                                 )
                             ),
                             deposited_tuple.2 + toUInt128OrZero(
-                                JSONExtractString(
+                                (
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'ReservesOneDeposited',
+                                        (attr) -> attr.key = 'ReservesOneDeposited',
                                         related_message_event_attributes
-                                    ),
-                                    'value'
+                                    ).value
                                 )
                             )
                         ),
                         arrayFilter(
                             (related_message_event_attributes) -> (
-                                JSONExtractString(
+                                (
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'module',
+                                        (attr) -> attr.key = 'module',
                                         related_message_event_attributes
-                                    ),
-                                    'value'
+                                    ).value
                                 ) = 'dex' AND
-                                JSONExtractString(
+                                (
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'action',
+                                        (attr) -> attr.key = 'action',
                                         related_message_event_attributes
-                                    ),
-                                    'value'
+                                    ).value
                                 ) = 'DepositLP' AND
-                                JSONExtractString(
+                                (
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'Creator',
+                                        (attr) -> attr.key = 'Creator',
                                         related_message_event_attributes
-                                    ),
-                                    'value'
-                                ) = JSONExtractString(
+                                    ).value
+                                ) = (
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
+                                        (attr) -> attr.key = '_contract_address',
                                         msg_event_attributes
-                                    ),
-                                    'value'
+                                    ).value
                                 )
                             ),
                             arrayMap(
-                                (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                                (msg_event) -> msg_event.attributes,
                                 arrayFilter(
-                                    msg_event -> JSONExtractString(msg_event, 'type') = 'message',
+                                    msg_event -> msg_event.type = 'message',
                                     `msg_events`
                                 )
                             )
@@ -177,36 +203,35 @@ ARRAY JOIN (
                 arrayFilter(
                     (msg_event_attributes) -> (
                         -- is action="dex_deposit"
-                        JSONExtractString(
+                        (
                             arrayFirst(
-                                (attr) -> JSONExtractString(attr, 'key') = 'action',
+                                (attr) -> attr.key = 'action',
                                 msg_event_attributes
-                            ),
-                            'value'
+                            ).value
                         ) = 'dex_deposit' AND
                         -- note: token_0/1_balance is the balance of the vault before depositing to the DEX
                         --       the 'dex_deposit' action may try to deposit all of these tokens however
                         --       it does not account for "swap on deposit" or potential errors (dropped deposit events)
                         -- has token_0_balance
                         arrayExists(
-                            (attr) -> JSONExtractString(attr, 'key') = 'token_0_balance',
+                            (attr) -> attr.key = 'token_0_balance',
                             msg_event_attributes
                         ) AND
                         -- has token_1_balance
                         arrayExists(
-                            (attr) -> JSONExtractString(attr, 'key') = 'token_1_balance',
+                            (attr) -> attr.key = 'token_1_balance',
                             msg_event_attributes
                         ) AND
                         -- has _contract_address
                         arrayExists(
-                            (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
+                            (attr) -> attr.key = '_contract_address',
                             msg_event_attributes
                         )
                     ),
                     arrayMap(
-                        (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                        (msg_event) -> msg_event.attributes,
                         arrayFilter(
-                            msg_event -> JSONExtractString(msg_event, 'type') = 'wasm',
+                            msg_event -> msg_event.type = 'wasm',
                             [msg_event]
                         )
                     )
@@ -220,12 +245,12 @@ ARRAY JOIN (
 ) AS `event_tuple`
 SETTINGS
   -- this query can have trouble backfilling with a lot of blocks
-  max_insert_block_size = 10000 -- to height 25697698: Peak memory usage: 94.64 GiB.
+  max_block_size = 10000 -- to height 28000000: Peak memory usage: 94.64 GiB.
 ;
 
--- spacebox.dex_vaults_dex_balance_withdrawal_writer source
+-- spacebox.dex_vaults_dex_transfer_dex_withdrawal_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_withdrawal_writer TO spacebox.dex_vaults_dex_balance (
+CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_transfer_dex_withdrawal_writer TO spacebox.dex_vaults_dex_transfer (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -234,8 +259,17 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_withdrawal_writer TO sp
     -- event data
     `action`            LowCardinality(String),
     `contract_address`  String,
-    `token_0_balance`   UInt128,
-    `token_1_balance`   UInt128,
+    `shares_added`      UInt128,
+    `shares_removed`    UInt128,
+    `shares_total`      UInt128,
+    `token_0_from_user` UInt128,
+    `token_1_from_user` UInt128,
+    `token_0_to_user`   UInt128,
+    `token_1_to_user`   UInt128,
+    `token_0_from_dex`  UInt128,
+    `token_1_from_dex`  UInt128,
+    `token_0_to_dex`    UInt128,
+    `token_1_to_dex`    UInt128,
     `token_0_balance_before_deposit`   UInt128,
     `token_1_balance_before_deposit`   UInt128,
     `token_0_price`     Float32,
@@ -245,7 +279,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_withdrawal_writer TO sp
 WITH
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
-    event_tuple.2 as `event_attributes`
+    event_tuple.2 as `event_attributes`,
+    event_tuple.3 as `withdrawals_tuple`
 SELECT
     `timestamp`,
     `height`,
@@ -253,8 +288,19 @@ SELECT
     `tx_index`,
     `event_index`,
     -- add event attributes
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
+    arrayFirst(attr -> attr.key = 'action', `event_attributes`).value AS `action`,
+    arrayFirst(attr -> attr.key = '_contract_address', `event_attributes`).value AS `contract_address`,
+    0 AS `shares_added`,
+    0 AS `shares_removed`,
+    0 AS `shares_total`,
+    0 AS `token_0_from_user`,
+    0 AS `token_1_from_user`,
+    0 AS `token_0_to_user`,
+    0 AS `token_1_to_user`,
+    withdrawals_tuple.1 AS `token_0_from_dex`,
+    withdrawals_tuple.2 AS `token_1_from_dex`,
+    0 AS `token_0_to_dex`,
+    0 AS `token_1_to_dex`,
     0 AS `token_0_balance`,
     0 AS `token_1_balance`,
     0 AS `token_0_balance_before_deposit`,
@@ -262,7 +308,7 @@ SELECT
     0 AS `token_0_price`,
     0 AS `token_1_price`,
     0 AS `price_0_to_1`
-FROM spacebox.message_event
+FROM spacebox.parsed_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
@@ -272,29 +318,84 @@ ARRAY JOIN (
                     -- event_tuple.1: event_index
                     toInt32(`msg_events_index_offset` + msg_event_index - 1),
                     -- event_tuple.2: event_attributes
-                    msg_event_attributes
+                    msg_event_attributes,
+                    -- event_tuple.3: related withdrawals amount
+                    arrayFold(
+                        (withdrawals_tuple, related_message_event_attributes) -> (
+                            withdrawals_tuple.1 + toUInt128OrZero(
+                                (
+                                    arrayFirst(
+                                        (attr) -> attr.key = 'ReservesZeroWithdrawn',
+                                        related_message_event_attributes
+                                    ).value
+                                )
+                            ),
+                            withdrawals_tuple.2 + toUInt128OrZero(
+                                (
+                                    arrayFirst(
+                                        (attr) -> attr.key = 'ReservesOneWithdrawn',
+                                        related_message_event_attributes
+                                    ).value
+                                )
+                            )
+                        ),
+                        arrayFilter(
+                            (related_message_event_attributes) -> (
+                                (
+                                    arrayFirst(
+                                        (attr) -> attr.key = 'module',
+                                        related_message_event_attributes
+                                    ).value
+                                ) = 'dex' AND
+                                (
+                                    arrayFirst(
+                                        (attr) -> attr.key = 'action',
+                                        related_message_event_attributes
+                                    ).value
+                                ) = 'WithdrawLP' AND
+                                (
+                                    arrayFirst(
+                                        (attr) -> attr.key = 'Creator',
+                                        related_message_event_attributes
+                                    ).value
+                                ) = (
+                                    arrayFirst(
+                                        (attr) -> attr.key = '_contract_address',
+                                        msg_event_attributes
+                                    ).value
+                                )
+                            ),
+                            arrayMap(
+                                (msg_event) -> msg_event.attributes,
+                                arrayFilter(
+                                    msg_event -> msg_event.type = 'message',
+                                    `msg_events`
+                                )
+                            )
+                        ),
+                        (toUInt128(0), toUInt128(0))
+                    )
                 ),
                 -- filter to only successful execution events
                 arrayFilter(
                     (msg_event_attributes) -> (
                         -- is action="dex_withdrawal"
-                        JSONExtractString(
+                        (
                             arrayFirst(
-                                (attr) -> JSONExtractString(attr, 'key') = 'action',
+                                (attr) -> attr.key = 'action',
                                 msg_event_attributes
-                            ),
-                            'value'
+                            ).value
                         ) = 'dex_withdrawal' AND
                         -- has _contract_address
                         arrayExists(
-                            (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
+                            (attr) -> attr.key = '_contract_address',
                             msg_event_attributes
                         )
                     ),
                     arrayMap(
-                        (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                        (msg_event) -> msg_event.attributes,
                         arrayFilter(
-                            msg_event -> JSONExtractString(msg_event, 'type') = 'wasm',
+                            msg_event -> msg_event.type = 'wasm',
                             [msg_event]
                         )
                     )
@@ -308,5 +409,88 @@ ARRAY JOIN (
 ) AS `event_tuple`
 SETTINGS
   -- this query can have trouble backfilling with a lot of blocks
-  max_insert_block_size = 10000
+  max_insert_block_size = 10000 -- to height 28000000: Peak memory usage: 94.64 GiB.
 ;
+
+
+
+-- spacebox.dex_vaults_dex_transfer_user_transfers_writer source
+
+CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_transfer_user_transfers_writer TO spacebox.dex_vaults_dex_transfer (
+    `timestamp`         DateTime64(9),
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    -- event data
+    `action`            LowCardinality(String),
+    `contract_address`  String,
+    `shares_added`      UInt128,
+    `shares_removed`    UInt128,
+    `shares_total`      UInt128,
+    `token_0_from_user` UInt128,
+    `token_1_from_user` UInt128,
+    `token_0_to_user`   UInt128,
+    `token_1_to_user`   UInt128,
+    `token_0_from_dex`  UInt128,
+    `token_1_from_dex`  UInt128,
+    `token_0_to_dex`    UInt128,
+    `token_1_to_dex`    UInt128,
+    `token_0_balance_before_deposit`   UInt128,
+    `token_1_balance_before_deposit`   UInt128,
+    `token_0_price`     Float32,
+    `token_1_price`     Float32,
+    `price_0_to_1`      Float32
+) AS
+INSERT INTO spacebox.dex_vaults_dex_transfer (
+    `timestamp`,
+    `height`,
+    `block_part_index`,
+    `tx_index`,
+    `event_index`,
+    -- event data
+    `action`,
+    `contract_address`,
+    `shares_added`,
+    `shares_removed`,
+    `shares_total`,
+    `token_0_from_user`,
+    `token_1_from_user`,
+    `token_0_to_user`,
+    `token_1_to_user`,
+    `token_0_from_dex`,
+    `token_1_from_dex`,
+    `token_0_to_dex`,
+    `token_1_to_dex`,
+    `token_0_balance_before_deposit`,
+    `token_1_balance_before_deposit`,
+    `token_0_price`,
+    `token_1_price`,
+    `price_0_to_1`
+)
+SELECT
+    `timestamp`,
+    `height`,
+    `block_part_index`,
+    `tx_index`,
+    `event_index`,
+    -- event data
+    `action`,
+    `contract_address`,
+    `shares_in` AS `shares_added`,
+    `shares_out` AS `shares_removed`,
+    `total_shares` AS `shares_total`,
+    `token_0_deposited` AS `token_0_from_user`,
+    `token_1_deposited` AS `token_1_from_user`,
+    `token_0_withdrawn` AS `token_0_to_user`,
+    `token_1_withdrawn` AS `token_1_to_user`,
+    0 AS `token_0_from_dex`,
+    0 AS `token_1_from_dex`,
+    0 AS `token_0_to_dex`,
+    0 AS `token_1_to_dex`,
+    0 AS `token_0_balance_before_deposit`,
+    0 AS `token_1_balance_before_deposit`,
+    0 AS `token_0_price`,
+    0 AS `token_1_price`,
+    0 AS `price_0_to_1`
+FROM spacebox.dex_vaults_shares;

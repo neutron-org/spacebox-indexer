@@ -430,32 +430,6 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_transfer_user_transfers_writer 
     `token_1_price`     Float32,
     `price_0_to_1`      Float32
 ) AS
-INSERT INTO spacebox.dex_vaults_dex_transfer (
-    `timestamp`,
-    `height`,
-    `block_part_index`,
-    `tx_index`,
-    `event_index`,
-    -- event data
-    `action`,
-    `contract_address`,
-    `shares_added`,
-    `shares_removed`,
-    `shares_total`,
-    `token_0_from_user`,
-    `token_1_from_user`,
-    `token_0_to_user`,
-    `token_1_to_user`,
-    `token_0_from_dex`,
-    `token_1_from_dex`,
-    `token_0_to_dex`,
-    `token_1_to_dex`,
-    `token_0_balance_before_deposit`,
-    `token_1_balance_before_deposit`,
-    `token_0_price`,
-    `token_1_price`,
-    `price_0_to_1`
-)
 SELECT
     `timestamp`,
     `height`,

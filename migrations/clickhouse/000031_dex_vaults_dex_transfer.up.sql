@@ -301,8 +301,6 @@ SELECT
     withdrawals_tuple.2 AS `token_1_from_dex`,
     0 AS `token_0_to_dex`,
     0 AS `token_1_to_dex`,
-    0 AS `token_0_balance`,
-    0 AS `token_1_balance`,
     0 AS `token_0_balance_before_deposit`,
     0 AS `token_1_balance_before_deposit`,
     0 AS `token_0_price`,

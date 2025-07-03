@@ -395,7 +395,7 @@ ARRAY JOIN (
 ) AS `event_tuple`
 SETTINGS
   -- this query can have trouble backfilling with a lot of blocks
-  max_insert_block_size = 10000 -- to height 28000000: Peak memory usage: 94.64 GiB.
+  max_block_size = 10000
 ;
 
 

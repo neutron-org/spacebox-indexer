@@ -17,6 +17,21 @@ CREATE TABLE spacebox.slinky_pairs
         ORDER BY (`base`, `quote`, `id`)
     SETTINGS index_granularity = 8192;
 
+
+-- spacebox.slinky_prices slinky_pairs_state "projection-like" view
+
+CREATE VIEW spacebox.slinky_pairs_state AS
+SELECT
+    `id`,
+    `base`,
+    `quote`,
+    minMerge(`height_from`) AS `height_from`,
+    maxMerge(`height_to`) AS `height_to`,
+    maxMerge(`nonce`) AS `nonce`
+FROM spacebox.slinky_pairs
+GROUP BY `base`, `quote`, `id`;
+
+
 -- spacebox.slinky_pairs_writer source
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.slinky_pairs_writer TO spacebox.slinky_pairs AS
@@ -40,17 +55,3 @@ ARRAY JOIN
         JSONExtractArrayRaw(`prices`)
     ) as mapping_tuple
 GROUP BY `base`, `quote`, `id`;
-
-/*
--- how to query:
-SELECT
-    `id`,
-    `base`,
-    `quote`,
-    minMerge(`height_from`) as `height_from`,
-    maxMerge(`height_to`) as `height_to`,
-    maxMerge(`nonce`) as `nonce`
-FROM spacebox.slinky_pairs
-GROUP BY `base`, `quote`, `id`
-ORDER BY `id` ASC;
-*/

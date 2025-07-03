@@ -126,6 +126,7 @@ SELECT
     0 AS `token_1_from_dex`,
     `deposited_tuple`.1 AS `token_0_to_dex`,
     `deposited_tuple`.2 AS `token_1_to_dex`,
+    -- note: token_0/1_balance_before_deposit may be empty (0) in early versions (before price_0_to_1)
     toUInt128OrZero(arrayFirst(attr -> attr.key = 'token_0_balance', `event_attributes`).value) AS `token_0_balance_before_deposit`,
     toUInt128OrZero(arrayFirst(attr -> attr.key = 'token_1_balance', `event_attributes`).value) AS `token_1_balance_before_deposit`,
     toFloat32OrZero(arrayFirst(attr -> attr.key = 'price_0', `event_attributes`).value) AS `token_0_price`,
@@ -209,19 +210,6 @@ ARRAY JOIN (
                                 msg_event_attributes
                             ).value
                         ) = 'dex_deposit' AND
-                        -- note: token_0/1_balance is the balance of the vault before depositing to the DEX
-                        --       the 'dex_deposit' action may try to deposit all of these tokens however
-                        --       it does not account for "swap on deposit" or potential errors (dropped deposit events)
-                        -- has token_0_balance
-                        arrayExists(
-                            (attr) -> attr.key = 'token_0_balance',
-                            msg_event_attributes
-                        ) AND
-                        -- has token_1_balance
-                        arrayExists(
-                            (attr) -> attr.key = 'token_1_balance',
-                            msg_event_attributes
-                        ) AND
                         -- has _contract_address
                         arrayExists(
                             (attr) -> attr.key = '_contract_address',

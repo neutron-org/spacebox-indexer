@@ -101,4 +101,3 @@ ARRAY JOIN
         JSONExtractArrayRaw(`mappings`),
         JSONExtractArrayRaw(`prices`)
     ) as price_tuple;
-WHERE height > 0

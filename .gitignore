@@ -1,4 +1,7 @@
 volumes
+user_files/mainnet
+user_files/testnet
+
 .idea
 vendor
 .env.local

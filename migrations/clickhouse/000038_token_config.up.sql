@@ -52,10 +52,15 @@ CREATE TABLE spacebox.token_config (
     `symbol`                String, -- eg. wBTC
     `recommended_symbol`    String, -- eg. wBTC.axl
     `decimals`              UInt8,
-    `coingecko_id`          String
+    `coingecko_id`          String,
+    -- add projections for joining by symbol
+    PROJECTION token_config_by_symbol (SELECT * ORDER BY `symbol`)
 )
 ENGINE = ReplacingMergeTree()
 ORDER BY `denom`
+SETTINGS
+    deduplicate_merge_projection_mode = 'rebuild',
+    index_granularity = 8192
 AS
 WITH
     -- first make "symbol" more consistent by renaming Axelar wrapped assets

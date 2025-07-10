@@ -1,7 +1,7 @@
 
--- spacebox.denoms_source_data_from_skip definition
+-- spacebox.raw_token_data_from_skip definition
 
-CREATE TABLE spacebox.raw_denoms_source_data_from_skip (
+CREATE TABLE spacebox.raw_token_data_from_skip (
     `denom`                 String,
     `chain_id`              String,
     `origin_denom`          String,
@@ -41,7 +41,9 @@ SELECT
     `recommended_symbol`
 FROM file('../user_files/mainnet/skip-assets.json', 'JSONEachRow');
 
-CREATE TABLE spacebox.denoms_source_data_from_skip (
+-- spacebox.token_config definition
+
+CREATE TABLE spacebox.token_config (
     `denom`                 String,
     `origin_chain_id`       String,
     `origin_denom`          String,
@@ -83,4 +85,4 @@ SELECT
     `consistent_symbol` as `recommended_symbol`,
     `decimals`,
     `coingecko_id`
-FROM spacebox.raw_denoms_source_data_from_skip as source;
+FROM spacebox.raw_token_data_from_skip as source;

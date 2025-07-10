@@ -54,7 +54,8 @@ CREATE TABLE spacebox.token_config (
     `decimals`              UInt8,
     `coingecko_id`          String
 )
-ENGINE = Join(ANY, LEFT, `denom`)
+ENGINE = ReplacingMergeTree()
+ORDER BY `denom`
 AS
 WITH
     -- first make "symbol" more consistent by renaming Axelar wrapped assets

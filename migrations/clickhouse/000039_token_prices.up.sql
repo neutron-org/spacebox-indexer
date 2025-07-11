@@ -96,3 +96,34 @@ ARRAY JOIN
     ) as raw_slinky_prices_tuple
 WHERE `height_from` > 0
     AND `symbol` IN (SELECT DISTINCT symbol FROM spacebox.token_config);
+
+
+-- spacebox.token_prices_by_minute table
+
+CREATE TABLE spacebox.token_prices_by_minute
+(
+    `timestamp`         DateTime,
+    -- add height alias: as the height the price is valid from (for ASOF joins)
+    `height`            ALIAS `height_from`,
+    `height_from`       Int64,
+    `height_to`         Int64,
+    `symbol`            LowCardinality(String), -- symbol eg. BTC, wBTC, dATOM
+    `quote_currency`    LowCardinality(String), -- probably 'USD'
+    `price`             Float64 -- price in display token amount, eg. $/NTRN
+)
+ENGINE = ReplacingMergeTree(`height_to`)
+    PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
+    ORDER BY (`symbol`, `quote_currency`, `timestamp`) -- queries should be to a specific pair id for max performance
+SETTINGS index_granularity = 8192;
+
+-- spacebox.token_prices_by_minute_writer source
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.token_prices_by_minute_writer TO spacebox.token_prices_by_minute AS
+SELECT
+    toStartOfInterval(`timestamp`, INTERVAL 1 MINUTE) as `timestamp`,
+    `height_from`,
+    `height_to`,
+    `symbol`,
+    `quote_currency`,
+    `price`
+FROM spacebox.token_prices;

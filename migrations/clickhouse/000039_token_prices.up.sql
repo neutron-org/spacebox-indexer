@@ -100,30 +100,42 @@ WHERE `height_from` > 0
 
 -- spacebox.token_prices_by_minute table
 
-CREATE TABLE spacebox.token_prices_by_minute
+CREATE TABLE spacebox.token_prices_by_minute_agg
 (
     `timestamp`         DateTime,
     -- add height alias: as the height the price is valid from (for ASOF joins)
     `height`            ALIAS `height_from`,
-    `height_from`       Int64,
-    `height_to`         Int64,
+    `height_from`       AggregateFunction(min, Int64),
+    `height_to`         AggregateFunction(max, Int64),
     `symbol`            LowCardinality(String), -- symbol eg. BTC, wBTC, dATOM
     `quote_currency`    LowCardinality(String), -- probably 'USD'
-    `price`             Float64 -- price in display token amount, eg. $/NTRN
+    `price`             AggregateFunction(argMax, Float64, Int64) -- price in display token amount, eg. $/NTRN
 )
-ENGINE = ReplacingMergeTree(`height_to`)
+ENGINE = AggregatingMergeTree()
     PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
     ORDER BY (`symbol`, `quote_currency`, `timestamp`) -- queries should be to a specific pair id for max performance
 SETTINGS index_granularity = 8192;
 
--- spacebox.token_prices_by_minute_writer source
+-- spacebox.token_prices_by_minute_agg_writer source
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.token_prices_by_minute_writer TO spacebox.token_prices_by_minute AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.token_prices_by_minute_agg_writer TO spacebox.token_prices_by_minute_agg AS
 SELECT
-    toStartOfInterval(`timestamp`, INTERVAL 1 MINUTE) as `timestamp`,
-    `height_from`,
-    `height_to`,
+    toStartOfInterval(t.`timestamp`, INTERVAL 1 MINUTE) as `timestamp`,
+    minState(t.`height_from`) as `height_from`,
+    maxState(t.`height_to`) as `height_to`,
     `symbol`,
     `quote_currency`,
-    `price`
-FROM spacebox.token_prices;
+    argMaxState(t.`price`, t.`height_to`) as `price`
+FROM spacebox.token_prices as t
+GROUP BY `symbol`, `quote_currency`, `timestamp`;
+
+CREATE VIEW spacebox.token_prices_by_minute AS
+    SELECT
+        `timestamp`,
+        minMerge(`height_from`) as `height_from`,
+        maxMerge(`height_to`) as `height_to`,
+        `symbol`,
+        `quote_currency`,
+        argMaxMerge(`price`) as `price`
+    FROM spacebox.token_prices_by_minute_agg
+    GROUP BY `symbol`, `quote_currency`, `timestamp`;

@@ -27,41 +27,15 @@ CREATE TABLE spacebox.bank_transfer
     -- add index for user lookups type queries
     INDEX `address_index` (`address`) TYPE bloom_filter(0.01),
     -- add pre-aggregation projections for differently grouped data
-    -- note: a different solution using MVs is reverted in this line's commit
-    --       but it was determined to be maybe too complicated to implement at the time
-    --       consider it if the projection/views are becoming slow
-    PROJECTION bank_transfer_by_height (
-        SELECT
-            `timestamp`,
-            `height`,
-            `address`,
-            `denom`,
-            sum(`amount` * `sign`) as `amount_delta`
-        GROUP BY `address`, `denom`, `height`, `timestamp`
-    ),
-    PROJECTION bank_transfer_by_minute (
-        SELECT
-            toStartOfMinute(`timestamp`) as `minute`,
-            `address`,
-            `denom`,
-            sum(`amount` * `sign`) as `amount_delta`
-        GROUP BY `address`, `denom`, `minute`
-    ),
-    PROJECTION bank_transfer_by_day (
-        SELECT
-            toStartOfDay(`timestamp`) as `day`,
-            `address`,
-            `denom`,
-            sum(`amount` * `sign`) as `amount_delta`
-        GROUP BY `address`, `denom`, `day`
-    ),
+    -- note: a bank_transfer_by_x projections were tested behind this commit
+    --       they weren't very fast/useful: MV table ordering is more flexible
     PROJECTION bank_transfer_state (
         SELECT
             argMax(`height`, `sort_key`) as `height`,
             `address`,
             `denom`,
             sum(`amount` * `sign`) as `balance`
-        GROUP BY `address`, `denom`
+        GROUP BY `denom`, `address`
     )
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
@@ -74,40 +48,6 @@ SETTINGS
     index_granularity = 8192;
 
 
--- spacebox.bank_transfer bank_transfer_by_height projection view
-
-CREATE VIEW spacebox.bank_transfer_by_height AS
-    SELECT
-        `timestamp`,
-        `height`,
-        `address`,
-        `denom`,
-        sum(`amount` * `sign`) as `amount_delta`
-    FROM spacebox.bank_transfer
-    GROUP BY `address`, `denom`, `height`, `timestamp`;
-
--- spacebox.bank_transfer bank_transfer_by_minute projection view
-
-CREATE VIEW spacebox.bank_transfer_by_minute AS
-    SELECT
-        toStartOfMinute(`timestamp`) as `minute`,
-        `address`,
-        `denom`,
-        sum(`amount` * `sign`) as `amount_delta`
-    FROM spacebox.bank_transfer
-    GROUP BY `address`, `denom`, `minute`;
-
--- spacebox.bank_transfer bank_transfer_by_day projection view
-
-CREATE VIEW spacebox.bank_transfer_by_day AS
-    SELECT
-        toStartOfDay(`timestamp`) as `day`,
-        `address`,
-        `denom`,
-        sum(`amount` * `sign`) as `amount_delta`
-    FROM spacebox.bank_transfer
-    GROUP BY `address`, `denom`, `day`;
-
 -- spacebox.bank_transfer bank_transfer_state projection view
 
 CREATE VIEW spacebox.bank_transfer_state AS
@@ -117,7 +57,7 @@ CREATE VIEW spacebox.bank_transfer_state AS
         `denom`,
         sum(`amount` * `sign`) as `balance`
     FROM spacebox.bank_transfer
-    GROUP BY `address`, `denom`;
+    GROUP BY `denom`, `address`;
 
 
 -- spacebox.bank_transfer_writer source

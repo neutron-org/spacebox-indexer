@@ -9,6 +9,9 @@ CREATE TABLE spacebox.price_by_vault_denom
     `contract_address`  LowCardinality(String),
     `token_0_price`     Float64, -- price in denom (μtoken) amount, eg. $/untrn
     `token_1_price`     Float64, -- price in denom (μtoken) amount, eg. $/untrn
+    -- add index for timeseries queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax,
+    -- add projections for first and last state
     PROJECTION price_by_vault_denom_state (
         SELECT
             argMax(`timestamp`, `height`) as `timestamp`,
@@ -78,7 +81,9 @@ CREATE TABLE spacebox.price_by_vault_denom_by_minute_agg
     `height_to`         AggregateFunction(max, Int64),
     `contract_address`  LowCardinality(String),
     `token_0_price`     AggregateFunction(argMax, Float64, Int64), -- price in denom (μtoken) amount, eg. $/untrn
-    `token_1_price`     AggregateFunction(argMax, Float64, Int64)  -- price in denom (μtoken) amount, eg. $/untrn
+    `token_1_price`     AggregateFunction(argMax, Float64, Int64), -- price in denom (μtoken) amount, eg. $/untrn
+    -- add index for timeseries queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax
 )
 ENGINE = AggregatingMergeTree()
     PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries

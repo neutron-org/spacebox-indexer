@@ -26,6 +26,7 @@ CREATE TABLE spacebox.dex_vaults_events_dex_deposit
     PROJECTION dex_vaults_events_dex_deposit_state (
         SELECT
             `contract_address`,
+            argMax(`timestamp`, `sort_key`) as `timestamp`,
             argMax(`height`, `sort_key`) as `height`,
             argMax(`token_0_balance`, `sort_key`) as `token_0_balance`,
             argMax(`token_1_balance`, `sort_key`) as `token_1_balance`,
@@ -47,6 +48,7 @@ SETTINGS
 CREATE VIEW spacebox.dex_vaults_events_dex_deposit_state AS
     SELECT
         `contract_address`,
+        argMax(`timestamp`, `sort_key`) as `timestamp`,
         argMax(`height`, `sort_key`) as `height`,
         argMax(`token_0_balance`, `sort_key`) as `token_0_balance`,
         argMax(`token_1_balance`, `sort_key`) as `token_1_balance`,

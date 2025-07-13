@@ -241,8 +241,9 @@ WITH
     ),
     shares_valued AS (
         WITH
-            p."token_0_price" as "token_price_0",
-            p."token_1_price" as "token_price_1"
+            if(p."timestamp" > 0, p."token_0_price", p_first."token_0_price") as "token_price_0",
+            if(p."timestamp" > 0, p."token_1_price", p_first."token_1_price") as "token_price_1",
+            if(p."timestamp" > 0, p."timestamp", p_first."timestamp") as `price_timestamp`
         SELECT
             s.`timestamp` as `timestamp`,
             s.`height` as `height`,
@@ -261,7 +262,7 @@ WITH
             s.`shares_out` as `shares_out`,
             s.`total_shares` as `total_shares`,
             -- price information
-            p.`timestamp` as `price_timestamp`,
+            `price_timestamp`,
             "token_price_0" as "price_0",
             "token_price_1" as "price_1",
             toFloat64(`token_0_deposited`) * "token_price_0" +
@@ -282,6 +283,8 @@ WITH
         ASOF LEFT JOIN spacebox.price_by_vault_denom as p
             ON (s."contract_address" = p."contract_address")
             AND s."timestamp" >= p."timestamp"
+        ANY LEFT JOIN spacebox.price_by_vault_denom_first_state as p_first
+            ON (s."contract_address" = p_first."contract_address")
     )
     SELECT *
     FROM shares_valued;

@@ -122,8 +122,8 @@ WITH
             "token_price_1" * toFloat64("token_1_balance_before_deposit") as "token_1_balance_before_deposit_value",
             -- use estimated balance for balance equivalent amount hold amounts
             "token_0_balance_before_deposit_value" + "token_1_balance_before_deposit_value" as "balance_value",
-            "balance_value" / 2 / "token_price_0" as "token_0_balance_hold_equivalent_amount",
-            "balance_value" / 2 / "token_price_1" as "token_1_balance_hold_equivalent_amount"
+            if("token_price_0" > 0, "balance_value" / 2 / "token_price_0", 0) as "token_0_balance_hold_equivalent_amount",
+            if("token_price_1" > 0, "balance_value" / 2 / "token_price_1", 0) as "token_1_balance_hold_equivalent_amount"
         SELECT
             s."timestamp" as "timestamp",
             s."height" as "height",
@@ -230,8 +230,8 @@ WITH
             "token_price_1" * toFloat64("token_1_balance_before_deposit") as "token_1_balance_before_deposit_value",
             -- use estimated balance for balance equivalent amount hold amounts
             "token_0_balance_before_deposit_value" + "token_1_balance_before_deposit_value" as "balance_value",
-            "balance_value" / 2 / "token_price_0" as "token_0_balance_hold_equivalent_amount",
-            "balance_value" / 2 / "token_price_1" as "token_1_balance_hold_equivalent_amount"
+            if("token_price_0" > 0, "balance_value" / 2 / "token_price_0", 0) as "token_0_balance_hold_equivalent_amount",
+            if("token_price_1" > 0, "balance_value" / 2 / "token_price_1", 0) as "token_1_balance_hold_equivalent_amount"
         SELECT
             s."timestamp" as "timestamp",
             s."height" as "height",

@@ -35,9 +35,10 @@ CREATE TABLE spacebox.dex_vaults_shares_valued
     `hold_equivalent_0` Float64,
     `hold_equivalent_1` Float64,
     `balance_timestamp` DateTime64(9),
-    `token_0_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
-    `token_1_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
-    `value_close`       Float64, -- value held in vault (after deposit/withdrawal)
+    `token_0_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
+    `token_1_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
+    `value_open`        Float64, -- value held in vault (before deposit/withdrawal)
+    `value_close`       Float64, -- value held in vault (~after deposit/withdrawal)
     -- determine most recent version by the recentness of the price data
     `timestamp_version`     UInt64 MATERIALIZED
                             toUnixTimestamp64Milli(`price_timestamp`) +
@@ -79,7 +80,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_vaults_shares_valued_writer 
     `shares_out`        UInt128, -- shares removed
     `total_shares`      UInt128, -- total shares
     -- price information
-    `price_timestamp`  DateTime64(9),
+    `price_timestamp`   DateTime64(9),
     `price_0`           Float64,
     `price_1`           Float64,
     `value_deposited`   Float64,
@@ -87,9 +88,10 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_vaults_shares_valued_writer 
     `hold_equivalent_0` Float64,
     `hold_equivalent_1` Float64,
     `balance_timestamp` DateTime64(9),
-    `token_0_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
-    `token_1_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
-    `value_close`       Float64  -- value held in vault (after deposit/withdrawal)
+    `token_0_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
+    `token_1_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
+    `value_open`        Float64, -- value held in vault (before deposit/withdrawal)
+    `value_close`       Float64  -- value held in vault (~after deposit/withdrawal)
 ) AS
 WITH
     shares as (
@@ -114,14 +116,10 @@ WITH
     ),
     shares_with_token_config_and_balance as (
         SELECT
-            s.*,
-            b.`token_0_balance_before_deposit` as `token_0_balance_before_deposit`,
-            b.`token_1_balance_before_deposit` as `token_1_balance_before_deposit`
+            s.*
         FROM shares as s
         ANY LEFT JOIN spacebox.dex_vaults_config_state as c
             on s.`contract_address` = c.`contract_address`
-        ANY LEFT JOIN spacebox.dex_vaults_dex_balance_state as b
-            on s.`contract_address` = b.`contract_address`
         WHERE c."token_0_quote_currency" = 'USD'
           AND c."token_1_quote_currency" = 'USD'
     ),
@@ -157,13 +155,17 @@ WITH
             if("token_price_0" > 0, ("value_deposited" - "value_withdrawn") / 2 / "token_price_0", 0) as "hold_equivalent_0",
             if("token_price_1" > 0, ("value_deposited" - "value_withdrawn") / 2 / "token_price_1", 0) as "hold_equivalent_1",
             0 as `balance_timestamp`,
-            s.`token_0_balance_before_deposit` + `token_0_deposited` - `token_0_withdrawn` as "token_0_balance",
-            s.`token_1_balance_before_deposit` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
+            b.`token_0_balance` as "token_0_balance",
+            b.`token_1_balance` as "token_1_balance",
             toFloat64(`token_0_balance`) * "token_price_0" +
-            toFloat64(`token_1_balance`) * "token_price_1" as `value_close`
+            toFloat64(`token_1_balance`) * "token_price_1" as `value_open`,
+            toFloat64(`token_0_balance` + `token_0_deposited` - `token_0_withdrawn`) * "token_price_0" +
+            toFloat64(`token_1_balance` + `token_1_deposited` - `token_1_withdrawn`) * "token_price_1" as `value_close`
         FROM shares_with_token_config_and_balance as s
         ANY LEFT JOIN spacebox.price_by_vault_denom_state as p
             ON (s."contract_address" = p."contract_address")
+        ANY LEFT JOIN spacebox.dex_vaults_events_dex_deposit_state as b
+            on s.`contract_address` = b.`contract_address`
     )
     SELECT *
     FROM shares_valued;
@@ -200,9 +202,10 @@ TO spacebox.dex_vaults_shares_valued (
     `hold_equivalent_0` Float64,
     `hold_equivalent_1` Float64,
     `balance_timestamp` DateTime64(9),
-    `token_0_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
-    `token_1_balance`   UInt128, -- amount held in vault (after deposit/withdrawal)
-    `value_close`       Float64  -- value held in vault (after deposit/withdrawal)
+    `token_0_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
+    `token_1_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
+    `value_open`        Float64, -- value held in vault (before deposit/withdrawal)
+    `value_close`       Float64  -- value held in vault (~after deposit/withdrawal)
 ) AS
 WITH
     shares as (
@@ -275,10 +278,12 @@ WITH
             if("token_price_0" > 0, ("value_deposited" - "value_withdrawn") / 2 / "token_price_0", 0) as "hold_equivalent_0",
             if("token_price_1" > 0, ("value_deposited" - "value_withdrawn") / 2 / "token_price_1", 0) as "hold_equivalent_1",
             b.`timestamp` as `balance_timestamp`,
-            b.`token_0_balance` + `token_0_deposited` - `token_0_withdrawn` as "token_0_balance",
-            b.`token_1_balance` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
-            greatest(toFloat64(`token_0_balance`) * "token_price_0" +
-            toFloat64(`token_1_balance`) * "token_price_1", 0) as `value_close`
+            b.`token_0_balance` as "token_0_balance",
+            b.`token_1_balance` as "token_1_balance",
+            toFloat64(`token_0_balance`) * "token_price_0" +
+            toFloat64(`token_1_balance`) * "token_price_1" as `value_open`,
+            toFloat64(`token_0_balance` + `token_0_deposited` - `token_0_withdrawn`) * "token_price_0" +
+            toFloat64(`token_1_balance` + `token_1_deposited` - `token_1_withdrawn`) * "token_price_1" as `value_close`
         FROM shares_with_token_config as s
         ASOF LEFT JOIN spacebox.dex_vaults_events_dex_deposit as b
             ON (s.`contract_address` = b.`contract_address`)

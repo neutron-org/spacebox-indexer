@@ -275,14 +275,14 @@ WITH
             if("token_price_0" > 0, ("value_deposited" - "value_withdrawn") / 2 / "token_price_0", 0) as "hold_equivalent_0",
             if("token_price_1" > 0, ("value_deposited" - "value_withdrawn") / 2 / "token_price_1", 0) as "hold_equivalent_1",
             b.`timestamp` as `balance_timestamp`,
-            b.`token_0_balance_before_deposit` + `token_0_deposited` - `token_0_withdrawn` as "token_0_balance",
-            b.`token_1_balance_before_deposit` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
+            b.`token_0_balance` + `token_0_deposited` - `token_0_withdrawn` as "token_0_balance",
+            b.`token_1_balance` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
             greatest(toFloat64(`token_0_balance`) * "token_price_0" +
             toFloat64(`token_1_balance`) * "token_price_1", 0) as `value_close`
         FROM shares_with_token_config as s
-        ASOF LEFT JOIN (SELECT * FROM spacebox.dex_vaults_dex_balance WHERE `action` IN 'dex_deposit') as b
-            ON (b.`contract_address` = s.`contract_address`)
-            AND b.`height` <= s.`height`
+        ASOF LEFT JOIN spacebox.dex_vaults_events_dex_deposit as b
+            ON (s.`contract_address` = b.`contract_address`)
+            AND s.`height` >= b.`height`
         ASOF LEFT JOIN spacebox.price_by_vault_denom as p
             ON (s."contract_address" = p."contract_address")
             AND s."timestamp" >= p."timestamp"

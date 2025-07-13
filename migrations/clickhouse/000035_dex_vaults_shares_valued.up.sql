@@ -206,18 +206,6 @@ TO spacebox.dex_vaults_shares_valued (
 ) AS
 WITH
     shares as (
-        -- get base data of unvalued share rows
-        -- find already valued shares to exclude from the update list
-        WITH old_valued_shares_events AS (
-            SELECT `height`, `block_part_index`, `tx_index`, `event_index`
-            FROM spacebox.dex_vaults_shares_valued
-            -- allow overwriting valuation of new shares several times
-            -- note: this data can be stale if shares or price data failed to
-            --       update for the period of time within this WHERE condition
-            WHERE `timestamp` < addHours(NOW(), -1)
-               OR `balance_timestamp` = 0
-               OR `price_timestamp` = 0
-        )
         SELECT
             `timestamp`,
             `height`,
@@ -235,11 +223,13 @@ WITH
             `shares_in`,
             `shares_out`,
             `total_shares`
-        FROM spacebox.dex_vaults_shares
-        WHERE (`height`, `block_part_index`, `tx_index`, `event_index`) NOT IN (
-            SELECT (`height`, `block_part_index`, `tx_index`, `event_index`)
-            FROM old_valued_shares_events
-        )
+        FROM spacebox.dex_vaults_shares_valued
+        -- allow overwriting valuation of new shares several times
+        -- note: this data can be stale if shares or price data failed to
+        --       update for the period of time within this WHERE condition
+        WHERE `timestamp` > addHours(NOW(), -1)
+            OR `balance_timestamp` = 0
+            OR `price_timestamp` = 0
     ),
     shares_with_token_config as (
         SELECT s.*

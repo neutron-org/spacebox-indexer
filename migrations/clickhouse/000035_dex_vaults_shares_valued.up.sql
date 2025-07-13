@@ -215,7 +215,8 @@ WITH
             -- note: this data can be stale if shares or price data failed to
             --       update for the period of time within this WHERE condition
             WHERE `timestamp` < addHours(NOW(), -1)
-              AND `price_timestamp` > 0
+               OR `balance_timestamp` = 0
+               OR `price_timestamp` = 0
         )
         SELECT
             `timestamp`,

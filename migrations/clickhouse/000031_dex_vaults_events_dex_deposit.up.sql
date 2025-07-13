@@ -124,6 +124,11 @@ ARRAY JOIN (
                         arrayExists(
                             (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
                             msg_event_attributes
+                        ) AND
+                        -- has no status key (used for replies)
+                        NOT arrayExists(
+                            (attr) -> JSONExtractString(attr, 'key') = 'status',
+                            msg_event_attributes
                         )
                     ),
                     arrayMap(

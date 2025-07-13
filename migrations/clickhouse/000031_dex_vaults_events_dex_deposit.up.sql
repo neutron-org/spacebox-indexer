@@ -51,7 +51,10 @@ CREATE VIEW spacebox.dex_vaults_events_dex_deposit_state AS
         argMax(`token_0_balance`, `sort_key`) as `token_0_balance`,
         argMax(`token_1_balance`, `sort_key`) as `token_1_balance`,
         argMax(`price_0`, `sort_key`) as `price_0`,
-        argMax(`price_1`, `sort_key`) as `price_1`
+        argMax(`price_1`, `sort_key`) as `price_1`,
+        toFloat64(`token_0_balance`) * `price_0` as `token_0_value`,
+        toFloat64(`token_1_balance`) * `price_1` as `token_1_value`,
+        `token_0_value` + `token_1_value` as `tvl`
     FROM spacebox.dex_vaults_events_dex_deposit
     GROUP BY `contract_address`;
 

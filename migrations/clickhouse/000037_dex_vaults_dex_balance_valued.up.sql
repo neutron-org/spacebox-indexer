@@ -20,7 +20,6 @@ CREATE TABLE spacebox.dex_vaults_dex_balance_valued
     `token_1_balance_before_deposit`   UInt128,
     `token_0_price`     Float32,
     `token_1_price`     Float32,
-    `price_0_to_1`      Float32,
     -- price information
     `price_timestamp`   DateTime64(9),
     `token_0_balance_value` Float64,
@@ -90,7 +89,6 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_valued_deposit_writer T
     `token_1_balance_before_deposit`   UInt128,
     `token_0_price`     Float32,
     `token_1_price`     Float32,
-    `price_0_to_1`      Float32,
     -- price information
     `price_timestamp`   DateTime64(9),
     `token_0_balance_value` Float64,
@@ -141,7 +139,6 @@ WITH
             s."token_1_balance_before_deposit" as "token_1_balance_before_deposit",
             s."token_0_price" as "token_0_price",
             s."token_1_price" as "token_1_price",
-            s."price_0_to_1" as "price_0_to_1",
             -- price information
             0 as "price_timestamp",
             "token_0_balance_value",
@@ -177,7 +174,6 @@ TO spacebox.dex_vaults_dex_balance_valued (
     `token_1_balance_before_deposit`   UInt128,
     `token_0_price`     Float32,
     `token_1_price`     Float32,
-    `price_0_to_1`      Float32,
     -- price information
     `price_timestamp` DateTime64(9),
     `token_0_balance_value` Float64,
@@ -204,8 +200,7 @@ WITH
             `token_0_balance_before_deposit`,
             `token_1_balance_before_deposit`,
             `token_0_price`,
-            `token_1_price`,
-            `price_0_to_1`
+            `token_1_price`
         FROM spacebox.dex_vaults_dex_balance_valued
         -- allow overwriting valuation of new shares several times
         -- note: this data can be stale if shares or price data failed to
@@ -252,7 +247,6 @@ WITH
             s."token_1_balance_before_deposit" as "token_1_balance_before_deposit",
             s."token_0_price" as "token_0_price",
             s."token_1_price" as "token_1_price",
-            s."price_0_to_1" as "price_0_to_1",
             -- price information
             p."timestamp" as "price_timestamp",
             "token_0_balance_value",

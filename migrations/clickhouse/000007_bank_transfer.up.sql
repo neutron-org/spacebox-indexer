@@ -31,6 +31,7 @@ CREATE TABLE spacebox.bank_transfer
     --       they weren't very fast/useful: MV table ordering is more flexible
     PROJECTION bank_transfer_state (
         SELECT
+            argMax(`timestamp`, `sort_key`) as `timestamp`,
             argMax(`height`, `sort_key`) as `height`,
             `address`,
             `denom`,
@@ -52,6 +53,7 @@ SETTINGS
 
 CREATE VIEW spacebox.bank_transfer_state AS
     SELECT
+        argMax(`timestamp`, `sort_key`) as `timestamp`,
         argMax(`height`, `sort_key`) as `height`,
         `address`,
         `denom`,

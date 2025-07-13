@@ -72,9 +72,9 @@ CREATE VIEW spacebox.dex_vaults_dex_balance_valued_state AS
     GROUP BY `contract_address`;
 
 
--- spacebox.dex_vaults_dex_balance_valued_deposit_writer source
+-- spacebox.dex_vaults_dex_balance_valued_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_valued_deposit_writer TO spacebox.dex_vaults_dex_balance_valued (
+CREATE MATERIALIZED VIEW spacebox.dex_vaults_dex_balance_valued_writer TO spacebox.dex_vaults_dex_balance_valued (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,

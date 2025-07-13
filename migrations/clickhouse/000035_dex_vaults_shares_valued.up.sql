@@ -27,8 +27,7 @@ CREATE TABLE spacebox.dex_vaults_shares_valued
     `shares_out`        UInt128, -- shares removed
     `total_shares`      UInt128, -- total shares
     -- price information
-    `price_timestamp_0` DateTime64(9),
-    `price_timestamp_1` DateTime64(9),
+    `price_timestamp`   DateTime64(9),
     `price_0`           Float64,
     `price_1`           Float64,
     `value_deposited`   Float64,
@@ -41,8 +40,7 @@ CREATE TABLE spacebox.dex_vaults_shares_valued
     `value_close`       Float64, -- value held in vault (after deposit/withdrawal)
     -- determine most recent version by the recentness of the price data
     `timestamp_version`     UInt64 MATERIALIZED
-                            toUnixTimestamp64Milli(`price_timestamp_0`) +
-                            toUnixTimestamp64Milli(`price_timestamp_1`) +
+                            toUnixTimestamp64Milli(`price_timestamp`) +
                             toUnixTimestamp64Milli(`balance_timestamp`),
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
@@ -81,8 +79,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_vaults_shares_valued_writer 
     `shares_out`        UInt128, -- shares removed
     `total_shares`      UInt128, -- total shares
     -- price information
-    `price_timestamp_0` DateTime64(9),
-    `price_timestamp_1` DateTime64(9),
+    `price_timestamp`  DateTime64(9),
     `price_0`           Float64,
     `price_1`           Float64,
     `value_deposited`   Float64,
@@ -118,12 +115,6 @@ WITH
     shares_with_token_config_and_balance as (
         SELECT
             s.*,
-            c.`token_0_denom` as `token_0_denom`,
-            c.`token_1_denom` as `token_1_denom`,
-            c.`token_0_decimals` as `token_0_decimals`,
-            c.`token_1_decimals` as `token_1_decimals`,
-            c.`token_0_symbol` as `token_0_symbol`,
-            c.`token_1_symbol` as `token_1_symbol`,
             b.`token_0_balance_before_deposit` as `token_0_balance_before_deposit`,
             b.`token_1_balance_before_deposit` as `token_1_balance_before_deposit`
         FROM shares as s
@@ -131,19 +122,13 @@ WITH
             on s.`contract_address` = c.`contract_address`
         ANY LEFT JOIN spacebox.dex_vaults_dex_balance_state as b
             on s.`contract_address` = b.`contract_address`
+        WHERE c."token_0_quote_currency" = 'USD'
+          AND c."token_1_quote_currency" = 'USD'
     ),
     shares_valued AS (
         WITH
-            toFloat64(p_0.`price`) * exp10(-(s."token_0_decimals" + p_0.`decimals`)) as "token_price_0",
-            toFloat64(p_1.`price`) * exp10(-(s."token_1_decimals" + p_1.`decimals`)) as "token_price_1",
-            price_state AS (
-                SELECT
-                `base`,
-                `price`,
-                `decimals`
-                FROM spacebox.slinky_prices_state
-                WHERE "quote" = 'USD'
-            )
+            p."token_0_price" as "token_price_0",
+            p."token_1_price" as "token_price_1"
         SELECT
             s.`timestamp` as `timestamp`,
             s.`height` as `height`,
@@ -162,26 +147,23 @@ WITH
             s.`shares_out` as `shares_out`,
             s.`total_shares` as `total_shares`,
             -- price information
-            0 as `price_timestamp_0`,
-            0 as `price_timestamp_1`,
+            0 as `price_timestamp`,
             "token_price_0" as "price_0",
             "token_price_1" as "price_1",
             toFloat64(`token_0_deposited`) * "token_price_0" +
             toFloat64(`token_1_deposited`) * "token_price_1" as `value_deposited`,
             toFloat64(`token_0_withdrawn`) * "token_price_0" +
             toFloat64(`token_1_withdrawn`) * "token_price_1" as `value_withdrawn`,
-            ("value_deposited" - "value_withdrawn") / 2 / "token_price_0" as "hold_equivalent_0",
-            ("value_deposited" - "value_withdrawn") / 2 / "token_price_1" as "hold_equivalent_1",
+            if("token_price_0" > 0, ("value_deposited" - "value_withdrawn") / 2 / "token_price_0", 0) as "hold_equivalent_0",
+            if("token_price_1" > 0, ("value_deposited" - "value_withdrawn") / 2 / "token_price_1", 0) as "hold_equivalent_1",
             0 as `balance_timestamp`,
             s.`token_0_balance_before_deposit` + `token_0_deposited` - `token_0_withdrawn` as "token_0_balance",
             s.`token_1_balance_before_deposit` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
             toFloat64(`token_0_balance`) * "token_price_0" +
             toFloat64(`token_1_balance`) * "token_price_1" as `value_close`
         FROM shares_with_token_config_and_balance as s
-        ANY LEFT JOIN price_state as p_0
-            ON (p_0.`base` = s.`token_0_symbol`)
-        ANY LEFT JOIN price_state as p_1
-            ON (p_1.`base` = s.`token_1_symbol`)
+        ANY LEFT JOIN spacebox.price_by_vault_denom_state as p
+            ON (s."contract_address" = p."contract_address")
     )
     SELECT *
     FROM shares_valued;
@@ -210,8 +192,7 @@ TO spacebox.dex_vaults_shares_valued (
     `shares_out`        UInt128, -- shares removed
     `total_shares`      UInt128, -- total shares
     -- price information
-    `price_timestamp_0` DateTime64(9),
-    `price_timestamp_1` DateTime64(9),
+    `price_timestamp`   DateTime64(9),
     `price_0`           Float64,
     `price_1`           Float64,
     `value_deposited`   Float64,
@@ -233,10 +214,8 @@ WITH
             -- allow overwriting valuation of new shares several times
             -- note: this data can be stale if shares or price data failed to
             --       update for the period of time within this WHERE condition
-            WHERE `timestamp` < addHours(NOW(), -1) AND (
-                `price_timestamp_0` > 0 OR
-                `price_timestamp_1` > 0
-            )
+            WHERE `timestamp` < addHours(NOW(), -1)
+              AND `price_timestamp` > 0
         )
         SELECT
             `timestamp`,
@@ -262,106 +241,17 @@ WITH
         )
     ),
     shares_with_token_config as (
-        SELECT
-            s.*,
-            c.`token_0_denom` as `token_0_denom`,
-            c.`token_1_denom` as `token_1_denom`,
-            c.`token_0_decimals` as `token_0_decimals`,
-            c.`token_1_decimals` as `token_1_decimals`,
-            c.`token_0_symbol` as `token_0_symbol`,
-            c.`token_1_symbol` as `token_1_symbol`
+        SELECT s.*
         FROM shares as s
         ANY LEFT JOIN spacebox.dex_vaults_config_state as c
             on s.`contract_address` = c.`contract_address`
-    ),
-    price_ids AS (
-        SELECT
-            `id`,
-            `base`
-        FROM spacebox.slinky_pairs_state
-        WHERE "quote" = 'USD'
-    ),
-    price_ids_0 AS (
-        SELECT `id`
-        FROM price_ids
-        WHERE "base" in (
-            SELECT DISTINCT "token_0_symbol"
-            FROM shares_with_token_config
-        )
-    ),
-    price_ids_1 AS (
-        SELECT `id`
-        FROM price_ids
-        WHERE "base" in (
-            SELECT DISTINCT "token_1_symbol"
-            FROM shares_with_token_config
-        )
-    ),
-    shares_with_price_ids AS (
-        SELECT s.*,
-            p_0.`id` as `price_id_0`,
-            p_1.`id` as `price_id_1`
-        FROM shares_with_token_config as s 
-        ANY LEFT JOIN price_ids as p_0 ON s.`token_0_symbol` = p_0.`base`
-        ANY LEFT JOIN price_ids as p_1 ON s.`token_1_symbol` = p_1.`base`
-    ),
-    first_prices AS (
-        SELECT
-            `timestamp`,
-            `base`,
-            `price`,
-            `decimals`
-        FROM spacebox.slinky_prices_first_state
-        WHERE "quote" = 'USD'
-    ),
-    shares_with_prices AS (
-        SELECT s.*,
-            p_0.`price` as `first_price_0`,
-            p_0.`timestamp` as `first_price_timestamp_0`,
-            p_0.`decimals` as `first_price_decimals_0`,
-            p_1.`price` as `first_price_1`,
-            p_1.`timestamp` as `first_price_timestamp_1`,
-            p_1.`decimals` as `first_price_decimals_1`
-        FROM shares_with_price_ids as s 
-        ANY LEFT JOIN first_prices as p_0 ON s.`token_0_symbol` = p_0.`base`
-        ANY LEFT JOIN first_prices as p_1 ON s.`token_1_symbol` = p_1.`base`
+        WHERE c."token_0_quote_currency" = 'USD'
+          AND c."token_1_quote_currency" = 'USD'
     ),
     shares_valued AS (
         WITH
-            s.`token_0_decimals` as `token_0_decimals`,
-            s.`token_1_decimals` as `token_1_decimals`,
-            if(
-                p_0.`timestamp`> 0,
-                p_0.`timestamp`,
-                s.`first_price_timestamp_0`
-            ) as `price_timestamp_0`,
-            if(
-                p_0.`timestamp`> 0,
-                p_0.`price`,
-                s.`first_price_0`
-            ) as `safe_price_0`,
-            if(
-                p_0.`timestamp`> 0,
-                p_0.`decimals`,
-                s.`first_price_decimals_0`
-            ) as `price_decimals_0`,
-            if(
-                p_1.`timestamp`> 0,
-                p_1.`timestamp`,
-                s.`first_price_timestamp_1`
-            ) as `price_timestamp_1`,
-            if(
-                p_1.`timestamp`> 0,
-                p_1.`price`,
-                s.`first_price_1`
-            ) as `safe_price_1`,
-            if(
-                p_1.`timestamp`> 0,
-                p_1.`decimals`,
-                s.`first_price_decimals_1`
-            ) as `price_decimals_1`,
-            toFloat64(`safe_price_0`) * exp10(-("token_0_decimals" + "price_decimals_0")) as "token_price_0",
-            toFloat64(`safe_price_1`) * exp10(-("token_1_decimals" + "price_decimals_1")) as "token_price_1"
+            p."token_0_price" as "token_price_0",
+            p."token_1_price" as "token_price_1"
         SELECT
             s.`timestamp` as `timestamp`,
             s.`height` as `height`,
@@ -380,8 +270,7 @@ WITH
             s.`shares_out` as `shares_out`,
             s.`total_shares` as `total_shares`,
             -- price information
-            `price_timestamp_0`,
-            `price_timestamp_1`,
+            p.`timestamp` as `price_timestamp`,
             "token_price_0" as "price_0",
             "token_price_1" as "price_1",
             toFloat64(`token_0_deposited`) * "token_price_0" +
@@ -395,16 +284,13 @@ WITH
             b.`token_1_balance_before_deposit` + `token_1_deposited` - `token_1_withdrawn` as "token_1_balance",
             greatest(toFloat64(`token_0_balance`) * "token_price_0" +
             toFloat64(`token_1_balance`) * "token_price_1", 0) as `value_close`
-        FROM shares_with_prices as s
-        ASOF LEFT JOIN (SELECT * FROM spacebox.slinky_prices WHERE `id` IN price_ids_0) as p_0
-            ON (p_0.`id` = s.`price_id_0`)
-            AND p_0.`timestamp` <= s.`timestamp`
-        ASOF LEFT JOIN (SELECT * FROM spacebox.slinky_prices WHERE `id` IN price_ids_1) as p_1
-            ON (p_1.`id` = s.`price_id_1`)
-            AND p_1.`timestamp` <= s.`timestamp`
+        FROM shares_with_token_config as s
         ASOF LEFT JOIN (SELECT * FROM spacebox.dex_vaults_dex_balance WHERE `action` IN 'dex_deposit') as b
             ON (b.`contract_address` = s.`contract_address`)
             AND b.`height` <= s.`height`
+        ASOF LEFT JOIN spacebox.price_by_vault_denom as p
+            ON (s."contract_address" = p."contract_address")
+            AND s."timestamp" >= p."timestamp"
     )
     SELECT *
     FROM shares_valued;

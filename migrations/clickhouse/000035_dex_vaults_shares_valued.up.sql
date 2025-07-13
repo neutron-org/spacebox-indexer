@@ -236,8 +236,11 @@ WITH
         FROM shares as s
         ANY LEFT JOIN spacebox.dex_vaults_config_state as c
             on s.`contract_address` = c.`contract_address`
+        ANY LEFT JOIN spacebox.price_by_vault_denom_first_state as p
+            on s.`contract_address` = p.`contract_address`
         WHERE c."token_0_quote_currency" = 'USD'
           AND c."token_1_quote_currency" = 'USD'
+          AND p."timestamp" > 0
     ),
     shares_valued AS (
         WITH

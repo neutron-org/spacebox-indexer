@@ -261,3 +261,65 @@ WITH
             AND s."timestamp" >= p."timestamp"
     )
   SELECT * FROM balances_valued;
+
+
+-- spacebox.dex_vaults_dex_balance_valued_by_minute_agg table
+CREATE TABLE spacebox.dex_vaults_dex_balance_valued_by_minute_agg
+(
+    `timestamp`         DateTime,
+    -- add height alias: as the height the price is valid from (for ASOF joins)
+    `height`            ALIAS `height_from`,
+    `height_from`       AggregateFunction(min, Int64),
+    `height_to`         AggregateFunction(max, Int64),
+    `contract_address`  LowCardinality(String),
+    `token_0_balance`   AggregateFunction(argMax, UInt128, Tuple(Int64, DateTime64(9))),
+    `token_1_balance`   AggregateFunction(argMax, UInt128, Tuple(Int64, DateTime64(9))),
+    `price_timestamp`   AggregateFunction(argMax, DateTime64(9), Tuple(Int64, DateTime64(9))),
+    `token_0_price`     AggregateFunction(argMax, Float32, Tuple(Int64, DateTime64(9))),
+    `token_1_price`     AggregateFunction(argMax, Float32, Tuple(Int64, DateTime64(9))),
+    `token_0_value`     AggregateFunction(argMax, Float64, Tuple(Int64, DateTime64(9))),
+    `token_1_value`     AggregateFunction(argMax, Float64, Tuple(Int64, DateTime64(9))),
+    -- add index for timeseries queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax
+)
+ENGINE = AggregatingMergeTree()
+    PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
+    ORDER BY (`contract_address`, `timestamp`) -- queries should be to a specific pair id for max performance
+SETTINGS index_granularity = 8192;
+
+-- spacebox.dex_vaults_dex_balance_valued_by_minute_agg_writer source
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_vaults_dex_balance_valued_by_minute_agg_writer TO spacebox.dex_vaults_dex_balance_valued_by_minute_agg AS
+SELECT
+    toStartOfInterval(t.`timestamp`, INTERVAL 1 MINUTE) as `timestamp`,
+    minState(t.`height`) as `height_from`,
+    maxState(t.`height`) as `height_to`,
+    `contract_address`,
+    argMaxState(t.`token_0_balance_before_deposit`, (t.`height`, t.`price_timestamp`)) as `token_0_balance`,
+    argMaxState(t.`token_1_balance_before_deposit`, (t.`height`, t.`price_timestamp`)) as `token_1_balance`,
+    argMaxState(t.`price_timestamp`, (t.`height`, t.`price_timestamp`)) as `price_timestamp`,
+    argMaxState(t.`token_0_price`, (t.`height`, t.`price_timestamp`)) as `token_0_price`,
+    argMaxState(t.`token_1_price`, (t.`height`, t.`price_timestamp`)) as `token_1_price`,
+    argMaxState(t.`token_0_balance_before_deposit_value`, (t.`height`, t.`price_timestamp`)) as `token_0_value`,
+    argMaxState(t.`token_1_balance_before_deposit_value`, (t.`height`, t.`price_timestamp`)) as `token_1_value`
+FROM spacebox.dex_vaults_dex_balance_valued as t
+WHERE t.`action` = 'dex_deposit'
+GROUP BY `contract_address`, `timestamp`;
+
+-- spacebox.dex_vaults_dex_balance_valued_by_minute view
+
+CREATE VIEW spacebox.dex_vaults_dex_balance_valued_by_minute AS
+    SELECT
+        `timestamp`,
+        minMerge(`height_from`) as `height_from`,
+        maxMerge(`height_to`) as `height_to`,
+        `contract_address`,
+        argMaxMerge(`token_0_balance`) as `token_0_balance`,
+        argMaxMerge(`token_1_balance`) as `token_1_balance`,
+        argMaxMerge(`price_timestamp`) as `price_timestamp`,
+        argMaxMerge(`token_0_price`) as `token_0_price`,
+        argMaxMerge(`token_1_price`) as `token_1_price`,
+        argMaxMerge(`token_0_value`) as `token_0_value`,
+        argMaxMerge(`token_1_value`) as `token_1_value`
+    FROM spacebox.dex_vaults_dex_balance_valued_by_minute_agg
+    GROUP BY `contract_address`, `timestamp`;

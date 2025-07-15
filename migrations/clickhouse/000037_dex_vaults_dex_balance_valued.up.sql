@@ -248,7 +248,9 @@ WITH
             s."token_0_price" as "token_0_price",
             s."token_1_price" as "token_1_price",
             -- price information
-            p."timestamp" as "price_timestamp",
+            -- prevent `price_timestamp` = 0 rows from being re-processed forever
+            -- by setting price=0 with p_first timestamps for times that are too early
+            if(s."timestamp" >= p_first."timestamp", p."timestamp", p_first."timestamp") as "price_timestamp",
             "token_0_balance_value",
             "token_1_balance_value",
             "token_0_balance_before_deposit_value",
@@ -256,9 +258,12 @@ WITH
             "token_0_balance_hold_equivalent_amount",
             "token_1_balance_hold_equivalent_amount"
         FROM balances_with_token_config as s
+        ANY LEFT JOIN spacebox.price_by_vault_denom_first_state as p_first
+            ON (s."contract_address" = p_first."contract_address")
         ASOF LEFT JOIN spacebox.price_by_vault_denom as p
             ON (s."contract_address" = p."contract_address")
             AND s."timestamp" >= p."timestamp"
+        WHERE p_first."timestamp" > 0
     )
   SELECT * FROM balances_valued;
 

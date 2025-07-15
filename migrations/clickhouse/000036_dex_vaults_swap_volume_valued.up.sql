@@ -225,7 +225,9 @@ WITH
             s."ReservesOutZero" as "ReservesOutZero",
             s."ReservesOutOne" as "ReservesOutOne",
             -- price information
-            p."timestamp" as "price_timestamp",
+            -- prevent `price_timestamp` = 0 rows from being re-processed forever
+            -- by setting price=0 with p_first timestamps for times that are too early
+            if(s."timestamp" >= p_first."timestamp", p."timestamp", p_first."timestamp") as "price_timestamp",
             "value_in_0",
             "value_in_1",
             "value_fee_0",
@@ -236,10 +238,13 @@ WITH
         ANY LEFT JOIN spacebox.dex_vaults_config_state as v
             ON (s."TokenZero" = v."token_0_denom")
             AND (s."TokenOne" = v."token_1_denom")
+        ANY LEFT JOIN spacebox.price_by_vault_denom_first_state as p_first
+            ON (v."contract_address" = p_first."contract_address")
         ASOF LEFT JOIN spacebox.price_by_vault_denom as p
             ON (v."contract_address" = p."contract_address")
             AND s."timestamp" >= p."timestamp"
-        WHERE v."token_0_quote_currency" = 'USD'
+        WHERE p_first."timestamp" > 0
+          AND v."token_0_quote_currency" = 'USD'
           AND v."token_1_quote_currency" = 'USD'
     )
   SELECT * FROM swaps_valued;

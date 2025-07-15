@@ -243,7 +243,6 @@ WITH
             on s.`contract_address` = p.`contract_address`
         WHERE c."token_0_quote_currency" = 'USD'
           AND c."token_1_quote_currency" = 'USD'
-          AND p."timestamp" > 0
     ),
     shares_valued AS (
         WITH
@@ -269,6 +268,8 @@ WITH
             s.`total_shares` as `total_shares`,
             -- price information
             `price_timestamp`,
+            -- note: the prices here extend to before p_first."timestamp"
+            --       so we can value user deposits as best we can before that time
             "token_price_0" as "price_0",
             "token_price_1" as "price_1",
             toFloat64(`token_0_deposited`) * "token_price_0" +
@@ -293,6 +294,7 @@ WITH
             AND s."timestamp" >= p."timestamp"
         ANY LEFT JOIN spacebox.price_by_vault_denom_first_state as p_first
             ON (s."contract_address" = p_first."contract_address")
+        WHERE p_first."timestamp" > 0
     )
     SELECT *
     FROM shares_valued;

@@ -255,12 +255,13 @@ SELECT
     `event_index`,
     -- add event attributes
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'sender'), `related_message_event_attributes`), 'value') AS `creator`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
+    -- note: save "withdrawal_reply_success" as "withdrawal"
+    'withdrawal' AS `action`,
     JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
     0 AS `token_0_deposited`,
     0 AS `token_1_deposited`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'withdraw_amount_0'), `event_attributes`), 'value')) AS `token_0_withdrawn`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'withdraw_amount_1'), `event_attributes`), 'value')) AS `token_1_withdrawn`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') IN ('withdraw_amount_0', 'withdrawn_token_0')), `event_attributes`), 'value')) AS `token_0_withdrawn`,
+    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') IN ('withdraw_amount_1', 'withdrawn_token_1')), `event_attributes`), 'value')) AS `token_1_withdrawn`,
     0 AS `shares_in`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'shares_burned'), `event_attributes`), 'value')) AS `shares_out`,
     toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'total_shares'), `event_attributes`), 'value')) AS `total_shares`
@@ -304,7 +305,7 @@ ARRAY JOIN (
                                     msg_event_attributes
                                 ),
                                 'value'
-                            ) = 'withdrawal' AND
+                            ) IN ('withdrawal', 'withdrawal_reply_success') AND
                             -- has shares_burned>0
                             toUInt128OrZero(
                                 JSONExtractString(

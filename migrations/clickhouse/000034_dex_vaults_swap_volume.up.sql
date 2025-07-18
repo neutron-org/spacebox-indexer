@@ -25,14 +25,10 @@ CREATE TABLE spacebox.dex_swaps
     `ReservesOutZero`   UInt256,
     `ReservesOutOne`    UInt256,
     -- add index for timeseries queries
-    INDEX `timestamp_index` (`timestamp`) TYPE minmax,
-    -- add index for height timeseries queries
-    INDEX `height_index` (`height`) TYPE minmax,
-    -- add index for update queries
-    INDEX `updated_at_index` (`updated_at`) TYPE minmax
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax
 )
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
-ENGINE = ReplacingMergeTree(`updated_at`)
+ENGINE = ReplacingMergeTree()
 ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
 SETTINGS index_granularity = 8192;
 

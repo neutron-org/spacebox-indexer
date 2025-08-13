@@ -95,6 +95,19 @@ CREATE TABLE spacebox.raw_block_results
         ORDER BY height
         SETTINGS index_granularity = 8192;
 
+CREATE TABLE spacebox.raw_block_results_order
+(
+    `updated_at`              DateTime MATERIALIZED nowInBlock(),
+    `height`                  Int64
+)
+ENGINE = MergeTree
+ORDER BY (`updated_at`)
+SETTINGS index_granularity = 8192;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.raw_block_results_order_writer TO spacebox.raw_block_results_order AS
+SELECT height
+FROM spacebox.raw_block_results;
+
 -- spacebox.raw_transaction_topic definition
 
 CREATE TABLE spacebox.raw_transaction_topic

@@ -149,3 +149,61 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
             )
         )
     ) AS `event_tuple`;
+
+
+CREATE TABLE spacebox.bank_transfer_by_address_then_denom
+(
+    `timestamp`         DateTime64(9),
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    -- add computed sort key for easier event ordering
+    `sort_key`          Tuple(Int64, Int8, Int32, Int32)
+                        MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
+    -- add coin index so that replacing merge tree keeps all coins of one event
+    `coins_index`       Int32,
+    -- event data
+    `type`              LowCardinality(String),
+    `increment`         Boolean MATERIALIZED `type` = 'coin_received',
+    `decrement`         Boolean MATERIALIZED `type` = 'coin_spent',
+    `sign`              Int8 MATERIALIZED if(`decrement` = 1, -1, 1),
+    `address`           String,
+    `denom`             LowCardinality(String),
+    `amount`            UInt128,
+    -- add index for timeseries queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax,
+    -- add index for user lookups type queries
+    INDEX `address_index` (`address`) TYPE bloom_filter(0.01)
+)
+-- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
+ENGINE = ReplacingMergeTree()
+PARTITION BY toYYYYMM(`timestamp`)
+ORDER BY (`address`, `denom`, `height`, `block_part_index`, `tx_index`, `event_index`, `coins_index`)
+SETTINGS index_granularity = 8192;
+
+CREATE MATERIALIZED VIEW spacebox.bank_transfer_by_address_then_denom_writer TO spacebox.bank_transfer_by_address_then_denom (
+    `timestamp`         DateTime64(9),
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    `coins_index`       Int32,
+    -- event data
+    `type`              LowCardinality(String),
+    `address`           String,
+    `denom`             LowCardinality(String),
+    `amount`            UInt128
+) AS
+    SELECT
+        `timestamp`,
+        `height`,
+        `block_part_index`,
+        `tx_index`,
+        `event_index`,
+        `coins_index`,
+        `type`,
+        `address`,
+        `denom`,
+        `amount`
+    FROM spacebox.bank_transfer;

@@ -9,6 +9,8 @@ CREATE TABLE spacebox.token_prices
     `height`            ALIAS `height_from`,
     `height_from`       Int64,
     `height_to`         Int64,
+    `source`            LowCardinality(String), -- probably 'Slinky' or 'Dex Vaults'
+    `source_id`         LowCardinality(String), -- eg. Slinky price id
     `symbol`            LowCardinality(String), -- symbol eg. BTC, wBTC, dATOM
     `quote_currency`    LowCardinality(String), -- probably 'USD'
     `price`             Float64, -- price in display token amount, eg. $/NTRN
@@ -16,19 +18,21 @@ CREATE TABLE spacebox.token_prices
         SELECT
             argMax(`timestamp`, `height_to`) as `timestamp`,
             argMax(`height`, `height_to`) as `height`,
+            `source`,
             `symbol`,
             `quote_currency`,
             argMax(`price`, `height_to`) as `price`
-        GROUP BY `symbol`, `quote_currency`
+        GROUP BY `symbol`, `quote_currency`, `source`
     ),
     PROJECTION token_prices_first_state (
         SELECT
             argMin(`timestamp`, `height_to`) as `timestamp`,
             argMin(`height`, `height_to`) as `height`,
+            `source`,
             `symbol`,
             `quote_currency`,
             argMin(`price`, `height_to`) as `price`
-        GROUP BY `symbol`, `quote_currency`
+        GROUP BY `symbol`, `quote_currency`, `source`
     )
 )
 ENGINE = ReplacingMergeTree(`height_to`)
@@ -45,21 +49,23 @@ CREATE VIEW spacebox.token_prices_state AS
     SELECT
         argMax(`timestamp`, `height_to`) as `timestamp`,
         argMax(`height`, `height_to`) as `height`,
+        `source`,
         `symbol`,
         `quote_currency`,
         argMax(`price`, `height_to`) as `price`
     FROM spacebox.token_prices
-    GROUP BY `symbol`, `quote_currency`;
+    GROUP BY `symbol`, `quote_currency`, `source`;
 
 CREATE VIEW spacebox.token_prices_first_state AS
     SELECT
         argMin(`timestamp`, `height_to`) as `timestamp`,
         argMin(`height`, `height_to`) as `height`,
+        `source`,
         `symbol`,
         `quote_currency`,
         argMin(`price`, `height_to`) as `price`
     FROM spacebox.token_prices
-    GROUP BY `symbol`, `quote_currency`;
+    GROUP BY `symbol`, `quote_currency`, `source`;
 
 
 -- spacebox.token_prices_writer source
@@ -71,11 +77,14 @@ WITH
     raw_slinky_prices_tuple.3 as `slinky_price_base`,
     raw_slinky_prices_tuple.4 as `slinky_price_quote`,
     raw_slinky_prices_tuple.5 as `slinky_price`,
-    raw_slinky_prices_tuple.6 as `slinky_price_decimals`
+    raw_slinky_prices_tuple.6 as `slinky_price_decimals`,
+    raw_slinky_prices_tuple.7 as `slinky_price_id`
 SELECT
     parseDateTime64BestEffortOrZero(`slinky_price_block_timestamp`) AS `timestamp`,
     toInt64OrZero(`slinky_price_block_height`)                      AS `height_from`,
     raw_slinky_price.`height`                                       AS `height_to`,
+    'Slinky'                                                        AS `source`,
+    `slinky_price_id`                                               AS `source_id`,
     `slinky_price_base`                                             AS `symbol`,
     `slinky_price_quote`                                            AS `quote_currency`,
     toFloat64(`slinky_price`)
@@ -89,7 +98,8 @@ ARRAY JOIN
             JSONExtractString(mapping, 'currency_pair', 'Base'),
             JSONExtractString(mapping, 'currency_pair', 'Quote'),
             JSONExtractString(price, 'price', 'price'),
-            JSONExtractString(price, 'decimals')
+            JSONExtractString(price, 'decimals'),
+            JSONExtractString(price, 'id')
         ),
         JSONExtractArrayRaw(`mappings`),
         JSONExtractArrayRaw(`prices`)

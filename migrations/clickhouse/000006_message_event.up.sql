@@ -1,10 +1,5 @@
--- tests:
--- most msgs in one tx: `SELECT argMax(height, length(msg_events)) as height, max(length(msg_events)) as msg_events_length FROM spacebox.message_event`
--- most events in one tx msg: `SELECT argMax(height, msg_part_index) as height, max(msg_part_index) as msg_parts_length FROM spacebox.message_event`
--- most BeginBlock msgs in one tx msg: `SELECT argMax(height, length(msg_events)) as height, max(length(msg_events)) as msg_events_length FROM spacebox.message_event WHERE block_part_index = 1`
--- most DEX msgs in one tx msg: `SELECT argMax(height, length(msg_events)) as height, max(length(msg_events)) as msg_events_length FROM spacebox.message_event WHERE arrayExists(x -> x like '%TickUpdate%', msg_events)`
 
-CREATE TABLE spacebox.parsed_event
+CREATE TABLE spacebox.message_event
 (
     `timestamp` DateTime64(9),
     `height` Int64,
@@ -15,18 +10,7 @@ CREATE TABLE spacebox.parsed_event
     `msg_indexes` Array(Int16),
     -- event data
     `msg_events_index_offset` Int32,
-    `msg_events` Array(
-        Tuple(
-            `type` LowCardinality(String),
-            `attributes` Array(
-                Tuple(
-                    `key` String,
-                    `value` String,
-                    `index` Boolean
-                )
-            )
-        )
-    ),
+    `msg_events` Array(String),
     -- add data skipping index for time queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax
 )
@@ -40,9 +24,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.parsed_event_txs_writer source
+-- spacebox.message_event_txs_writer source
 
-CREATE MATERIALIZED VIEW spacebox.parsed_event_txs_writer TO spacebox.parsed_event
+CREATE MATERIALIZED VIEW spacebox.message_event_txs_writer TO spacebox.message_event
 (
     `timestamp` DateTime64(9),
     `height` Int64,
@@ -53,18 +37,7 @@ CREATE MATERIALIZED VIEW spacebox.parsed_event_txs_writer TO spacebox.parsed_eve
     `msg_indexes` Array(Int16),
     -- event data
     `msg_events_index_offset` Int32,
-    `msg_events` Array(
-        Tuple(
-            `type` LowCardinality(String),
-            `attributes` Array(
-                Tuple(
-                    `key` String,
-                    `value` String,
-                    `index` Boolean
-                )
-            )
-        )
-    )
+    `msg_events` Array(String)
 ) AS
 WITH
     -- define join tuple parts for row fields
@@ -82,20 +55,7 @@ SELECT
     `msg_part_index`,
     `msg_indexes`,
     `msg_events_index_offset`,
-    arrayMap(
-        (msg_event) -> (
-            JSONExtractString(msg_event, 'type'),
-            arrayMap(
-                (attr) -> (
-                    JSONExtractString(attr, 'key'),
-                    JSONExtractString(attr, 'value'),
-                    JSONExtractString(attr, 'index')
-                ),
-                JSONExtractArrayRaw(msg_event, 'attributes')
-            )
-        ),
-        `msg_events`
-    )
+    `msg_events`
 FROM
     spacebox.raw_block_results
     ARRAY JOIN (
@@ -198,16 +158,13 @@ FROM
     ) AS `tx_result_tuple`
 SETTINGS
     -- split query execution into small chunks to reduce peak memory usage (~max 400MB each row)
-    -- test range: `WHERE height >= 27000000 AND height <= 28000000`: ~0.06ms per row
-    -- test most msgs in one tx: `WHERE height = 16845464`: 230ms
-    -- test most events in one tx msg: `WHERE height >= 19394163 AND height <= 19395365`: ~7ms per row (645 big rows)
-    -- test most events in one tx msg: `WHERE height >= 21689513 AND height <= 21689527`: ~56ms per big row (15 big rows)
-    -- test most DEX msgs in one tx msg: `WHERE height = 24820618`: 150ms
-    max_block_size = 100;
+    -- timed row query to be about 320ms for 500 msg parts or 280ms for 1 msg part of 4000 events
+    max_block_size = 100,
+    max_execution_time = 120;
 
--- spacebox.parsed_event_block_writer source
+-- spacebox.message_event_block_writer source
 
-CREATE MATERIALIZED VIEW spacebox.parsed_event_block_writer TO spacebox.parsed_event
+CREATE MATERIALIZED VIEW spacebox.message_event_block_writer TO spacebox.message_event
 (
     `timestamp` DateTime64(9),
     `height` Int64,
@@ -218,18 +175,7 @@ CREATE MATERIALIZED VIEW spacebox.parsed_event_block_writer TO spacebox.parsed_e
     `msg_indexes` Array(Int16),
     -- event data
     `msg_events_index_offset` Int32,
-    `msg_events` Array(
-        Tuple(
-            `type` LowCardinality(String),
-            `attributes` Array(
-                Tuple(
-                    `key` String,
-                    `value` String,
-                    `index` Boolean
-                )
-            )
-        )
-    )
+    `msg_events` Array(String)
 ) AS
 WITH
     -- define join tuple parts for row fields
@@ -246,20 +192,7 @@ SELECT
     0 as `msg_part_index`, -- not a tx
     [] as `msg_indexes`, -- not a tx
     `msg_events_index_offset`,
-    arrayMap(
-        (msg_event) -> (
-            JSONExtractString(msg_event, 'type'),
-            arrayMap(
-                (attr) -> (
-                    JSONExtractString(attr, 'key'),
-                    JSONExtractString(attr, 'value'),
-                    JSONExtractString(attr, 'index')
-                ),
-                JSONExtractArrayRaw(msg_event, 'attributes')
-            )
-        ),
-        `msg_events`
-    )
+    `msg_events`
 FROM
     spacebox.raw_block_results
     ARRAY JOIN (
@@ -341,6 +274,6 @@ FROM
     ) AS `block_event_tuple`
 SETTINGS
     -- split query execution into small chunks to reduce peak memory usage (~max 400MB each row)
-    -- test range: `WHERE height >= 27000000 AND height <= 28000000`: ~0.9ms per row
-    -- most BeginBlock msgs in one tx msg: `WHERE height = 24146813`: 67ms
-    max_block_size = 100;
+    -- timed row query to be about 320ms for 500 msg parts or 280ms for 1 msg part of 4000 events
+    max_block_size = 100,
+    max_execution_time = 120;

@@ -40,7 +40,7 @@ ENGINE = ReplacingMergeTree(`query_height`)
     PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
     ORDER BY (`id`, `timestamp`) -- queries should be to a specific pair id for max performance
 SETTINGS
-    deduplicate_merge_projection_mode = 'rebuild'
+    deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
 

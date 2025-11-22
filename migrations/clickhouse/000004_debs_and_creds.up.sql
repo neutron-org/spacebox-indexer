@@ -68,13 +68,13 @@ CREATE MATERIALIZED VIEW spacebox.debs_and_creds_finalized_block_writer TO space
 WITH txs_events AS (
     WITH b64 AS (
         SELECT height,
-            JSONExtractString(arrayJoin(JSONExtractArrayRaw(finalize_block_events)), 'type') AS TYPE,
+            JSONExtractString(arrayJoin(JSONExtractArrayRaw(finalize_block_events)), 'type') AS `type`,
             JSONExtractString(arrayJoin(JSONExtractArrayRaw(finalize_block_events)), 'attributes') AS attributes
         FROM spacebox.raw_block_results
     )
     SELECT
         height,
-        TYPE,
+        `type`,
         arrayMap(
             x -> concat('{"key":"', JSONExtractString(x, 'key'), '","value":"', JSONExtractString(x, 'value'), '","index":', JSONExtractRaw(x, 'index'), '}'),
             JSONExtractArrayRaw(attributes)
@@ -83,19 +83,19 @@ WITH txs_events AS (
 )
 SELECT
     height,
-    TYPE,
+    `type`,
     if(
-        TYPE = 'coin_spent',
+        `type` = 'coin_spent',
         JSONExtractString(arrayFilter(x -> (JSONExtractString(x, 'key') = 'spender'), attributes)[1], 'value'),
         JSONExtractString(arrayFilter(x -> (JSONExtractString(x, 'key') = 'receiver'), attributes)[1], 'value')
     ) AS address,
     arrayJoin(splitByChar(',', JSONExtractString(arrayFilter(x -> (JSONExtractString(x, 'key') = 'amount'), attributes)[1], 'value'))) AS coins,
     if(
-        TYPE = 'coin_spent',
+        `type` = 'coin_spent',
         -toInt128OrZero(extract(coins, '^(\\d+)')),
         toInt128OrZero(extract(coins, '^(\\d+)'))
     ) AS amount,
     extract(coins, '^\\d+(.*)') AS denom
 FROM txs_events
-WHERE (TYPE = 'coin_received')
-   OR (TYPE = 'coin_spent');
+WHERE (`type` = 'coin_received')
+   OR (`type` = 'coin_spent');

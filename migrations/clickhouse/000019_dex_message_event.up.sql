@@ -26,6 +26,7 @@ ORDER BY (
     `msg_part_index`,
     `wasm_part_index`
 )
+TTL timestamp + toIntervalDay(30)
 SETTINGS index_granularity = 8192;
 
 -- spacebox.dex_message_event_writer source

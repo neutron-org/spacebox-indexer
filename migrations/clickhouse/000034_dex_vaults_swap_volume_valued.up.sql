@@ -118,7 +118,7 @@ WITH
             "value_out_0",
             "value_out_1"
         FROM spacebox.dex_swaps as s
-        ANY LEFT JOIN spacebox.dex_vaults_config_state as v
+        ANY LEFT JOIN spacebox.dex_vaults_by_pair_config_state as v
             ON (s."TokenZero" = v."token_0_denom")
             AND (s."TokenOne" = v."token_1_denom")
         ANY LEFT JOIN spacebox.price_by_vault_denom_state as p
@@ -235,7 +235,7 @@ WITH
             "value_out_0",
             "value_out_1"
         FROM source as s
-        ANY LEFT JOIN spacebox.dex_vaults_config_state as v
+        ANY LEFT JOIN spacebox.dex_vaults_by_pair_config_state as v
             ON (s."TokenZero" = v."token_0_denom")
             AND (s."TokenOne" = v."token_1_denom")
         ANY LEFT JOIN spacebox.price_by_vault_denom_first_state as p_first

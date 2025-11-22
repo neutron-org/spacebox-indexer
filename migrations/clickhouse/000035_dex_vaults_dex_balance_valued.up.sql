@@ -103,7 +103,7 @@ WITH
     balances_with_token_config AS (
         SELECT s.*
         FROM source as s
-        ANY LEFT JOIN spacebox.dex_vaults_config_state as c
+        ANY LEFT JOIN spacebox.dex_vaults_by_pair_config_state as c
             on s.`contract_address` = c.`contract_address`
         WHERE c."token_0_quote_currency" = 'USD'
           AND c."token_1_quote_currency" = 'USD'
@@ -211,7 +211,7 @@ WITH
     balances_with_token_config AS (
         SELECT s.*
         FROM source as s
-        ANY LEFT JOIN spacebox.dex_vaults_config_state as c
+        ANY LEFT JOIN spacebox.dex_vaults_by_pair_config_state as c
             on s.`contract_address` = c.`contract_address`
         WHERE c."token_0_quote_currency" = 'USD'
           AND c."token_1_quote_currency" = 'USD'

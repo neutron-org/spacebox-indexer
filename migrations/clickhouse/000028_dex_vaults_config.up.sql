@@ -135,6 +135,44 @@ CREATE VIEW spacebox.dex_vaults_config_state AS
     WHERE `is_valid` = 1
     ORDER BY `contract_address` ASC;
 
+-- spacebox.dex_vaults_shares dex_vaults_by_pair_config_state projection view
+
+CREATE VIEW spacebox.dex_vaults_by_pair_config_state AS
+    SELECT *
+    FROM (
+        WITH s.`created_at_height` as `sort_key`
+        SELECT
+            argMax(`created_at`, `sort_key`) as `created_at`,
+            argMax(`updated_at`, `sort_key`) as `updated_at`,
+            argMax(`created_at_height`, `sort_key`) as `created_at_height`,
+            argMax(`updated_at_height`, `sort_key`) as `updated_at_height`,
+            argMax(`contract_address`, `sort_key`) as `contract_address`,
+            argMax(`whitelist`, `sort_key`) as `whitelist`,
+            `token_0_denom`,
+            `token_1_denom`,
+            argMax(`token_0_symbol`, `sort_key`) as `token_0_symbol`,
+            argMax(`token_1_symbol`, `sort_key`) as `token_1_symbol`,
+            argMax(`token_0_quote_currency`, `sort_key`) as `token_0_quote_currency`,
+            argMax(`token_1_quote_currency`, `sort_key`) as `token_1_quote_currency`,
+            argMax(`token_0_decimals`, `sort_key`) as `token_0_decimals`,
+            argMax(`token_1_decimals`, `sort_key`) as `token_1_decimals`,
+            argMax(`token_0_max_blocks_old`, `sort_key`) as `token_0_max_blocks_old`,
+            argMax(`token_1_max_blocks_old`, `sort_key`) as `token_1_max_blocks_old`,
+            argMax(`pool_id`, `sort_key`) as `pool_id`,
+            argMax(`deposit_cap`, `sort_key`) as `deposit_cap`,
+            argMax(`timestamp_stale`, `sort_key`) as `timestamp_stale`,
+            argMax(`fee_tier_config`, `sort_key`) as `fee_tier_config`,
+            argMax(`paused`, `sort_key`) as `paused`,
+            argMax(`skew`, `sort_key`) as `skew`,
+            argMax(`imbalance`, `sort_key`) as `imbalance`,
+            argMax(`oracle_contract`, `sort_key`) as `oracle_contract`,
+            argMax(`oracle_price_skew`, `sort_key`) as `oracle_price_skew`,
+            argMax(`denom`, `sort_key`) as `denom`
+            FROM spacebox.dex_vaults_config_state as s
+            GROUP BY `token_0_denom`, `token_1_denom`
+    )
+    ORDER BY `contract_address` ASC;
+
 
 -- spacebox.dex_vaults_config_event_writer source
 

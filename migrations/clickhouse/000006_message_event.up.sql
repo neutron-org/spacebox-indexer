@@ -160,8 +160,7 @@ FROM
 SETTINGS
     -- split query execution into small chunks to reduce peak memory usage (~max 400MB each row)
     -- timed row query to be about 320ms for 500 msg parts or 280ms for 1 msg part of 4000 events
-    max_block_size = 100,
-    max_execution_time = 120;
+    max_block_size = 100;
 
 -- spacebox.message_event_block_writer source
 
@@ -276,5 +275,4 @@ FROM
 SETTINGS
     -- split query execution into small chunks to reduce peak memory usage (~max 400MB each row)
     -- timed row query to be about 320ms for 500 msg parts or 280ms for 1 msg part of 4000 events
-    max_block_size = 100,
-    max_execution_time = 120;
+    max_block_size = 100;

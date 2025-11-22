@@ -78,8 +78,9 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_deposit_lp_writer TO spacebo
     WITH
         JSONExtractArrayRaw(`attributes`) as `event_attributes`,
         -- get possibly defined (since Neutron v6.0) attributes
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'AmountInTokenZero'), `event_attributes`), 'value') AS `AmountInTokenZeroString`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'AmountInTokenOne'), `event_attributes`), 'value') AS `AmountInTokenOneString`
+        -- since (Neutron v8.0) these are now be Decimal strings that require regex extraction to get the correct integer
+        extract(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'AmountInTokenZero'), `event_attributes`), 'value'), '^[0-9]+') AS `AmountInTokenZeroString`,
+        extract(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'AmountInTokenOne'), `event_attributes`), 'value'), '^[0-9]+') AS `AmountInTokenOneString`
     SELECT
         `timestamp`,
         `height`,

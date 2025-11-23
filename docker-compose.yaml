@@ -94,6 +94,8 @@ services:
     image: clickhouse/clickhouse-server:25.8.11.66
     restart: unless-stopped
     hostname: clickhouse
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Allows SSH connection to our other Clickhouse servers
     ulimits:
       nofile:
         soft: 262144

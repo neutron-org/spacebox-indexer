@@ -32,7 +32,6 @@ ENGINE = ReplacingMergeTree(`height`)
     PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
     ORDER BY (`contract_address`, `timestamp`) -- queries should be to a specific vault for max performance
 SETTINGS
-    deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
 -- spacebox.price_by_vault_denom price_by_vault_denom_state projection view

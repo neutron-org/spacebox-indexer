@@ -39,7 +39,6 @@ CREATE TABLE spacebox.dex_vaults_events_dex_deposit
 ENGINE = ReplacingMergeTree()
 ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
 SETTINGS
-    deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
 

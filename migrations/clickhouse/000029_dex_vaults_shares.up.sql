@@ -41,8 +41,6 @@ CREATE TABLE spacebox.dex_vaults_shares
 ENGINE = ReplacingMergeTree()
 ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
 SETTINGS
-    -- see docs: https://clickhouse.com/docs/operations/settings/merge-tree-settings#deduplicate_merge_projection_mode
-    deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
 

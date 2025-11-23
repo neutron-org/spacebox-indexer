@@ -39,8 +39,6 @@ CREATE TABLE spacebox.dex_swaps_valued
 ENGINE = ReplacingMergeTree(`price_timestamp`)
 ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
 SETTINGS
-    -- see docs: https://clickhouse.com/docs/operations/settings/merge-tree-settings#deduplicate_merge_projection_mode
-    deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
 
@@ -131,10 +129,50 @@ WITH
 
 -- spacebox.dex_swaps_valued_again_writer source
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_swaps_valued_again_writer
+CREATE TABLE spacebox.dex_swaps_valued_workaround
+(
+    `timestamp`         DateTime64(9),
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    -- add computed sort key for easier event ordering
+    `sort_key`          Tuple(Int64, Int8, Int32, Int32)
+                        MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
+    -- event data
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `Receiver`          Nullable(String),
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TickIndex`         Int64,
+    `Fee`               UInt64,
+    `TrancheKey`        Nullable(String),
+    `ReservesInZero`    UInt256,
+    `ReservesInOne`     UInt256,
+    `ReservesOutZero`   UInt256,
+    `ReservesOutOne`    UInt256,
+    -- price information
+    `price_timestamp`   DateTime64(9),
+    `value_in_0`        Float64,
+    `value_in_1`        Float64,
+    `value_fee_0`       Float64,
+    `value_fee_1`       Float64,
+    `value_out_0`       Float64, -- should be equal to ~(value_in_1 - value_fee_1)
+    `value_out_1`       Float64, -- should be equal to ~(value_in_0 - value_fee_0)
+    -- add index for timeseries queries
+    INDEX `timestamp_index` (`timestamp`) TYPE minmax
+)
+-- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
+ENGINE = ReplacingMergeTree(`price_timestamp`)
+ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
+SETTINGS
+    index_granularity = 8192;
+
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_swaps_valued_again_part_1_writer
 REFRESH EVERY 5 MINUTE OFFSET 30 SECOND RANDOMIZE FOR 20 SECOND
-APPEND
-TO spacebox.dex_swaps_valued (
+TO spacebox.dex_swaps_valued_workaround (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -188,8 +226,9 @@ WITH
         -- allow overwriting valuation of new shares several times
         -- note: this data can be stale if shares or price data failed to
         --       update for the period of time within this WHERE condition
-        WHERE `timestamp` > addHours(NOW(), -1)
-            OR `price_timestamp` = 0
+        -- WHERE `timestamp` > addHours(NOW(), -1)
+        --     OR `price_timestamp` = 0
+        WHERE `price_timestamp` = 0
     ),
     swaps_valued AS (
         WITH
@@ -247,4 +286,64 @@ WITH
           AND v."token_0_quote_currency" = 'USD'
           AND v."token_1_quote_currency" = 'USD'
     )
-  SELECT * FROM swaps_valued;
+  SELECT * FROM swaps_valued
+  SETTINGS allow_experimental_refreshable_materialized_view=true;
+
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_swaps_valued_again_part_2_writer
+TO spacebox.dex_swaps_valued (
+    `timestamp`         DateTime64(9),
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    -- event data
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `Receiver`          Nullable(String),
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TickIndex`         Int64,
+    `Fee`               UInt64,
+    `TrancheKey`        Nullable(String),
+    `ReservesInZero`    UInt256,
+    `ReservesInOne`     UInt256,
+    `ReservesOutZero`   UInt256,
+    `ReservesOutOne`    UInt256,
+    -- price information
+    `price_timestamp`   DateTime64(9),
+    `value_in_0`        Float64,
+    `value_in_1`        Float64,
+    `value_fee_0`       Float64,
+    `value_fee_1`       Float64,
+    `value_out_0`       Float64, -- should be equal to ~(value_in_1 - value_fee_1)
+    `value_out_1`       Float64, -- should be equal to ~(value_in_0 - value_fee_0)
+) AS
+SELECT
+    `timestamp`,
+    `height`,
+    `block_part_index`,
+    `tx_index`,
+    `event_index`,
+    -- event data
+    `type`,
+    `action`,
+    `Receiver`,
+    `TokenZero`,
+    `TokenOne`,
+    `TickIndex`,
+    `Fee`,
+    `TrancheKey`,
+    `ReservesInZero`,
+    `ReservesInOne`,
+    `ReservesOutZero`,
+    `ReservesOutOne`,
+    -- price information
+    `price_timestamp`,
+    `value_in_0`,
+    `value_in_1`,
+    `value_fee_0`,
+    `value_fee_1`,
+    `value_out_0`,
+    `value_out_1`
+FROM spacebox.dex_swaps_valued_workaround;

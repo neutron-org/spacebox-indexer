@@ -174,9 +174,9 @@ CREATE VIEW spacebox.dex_vaults_by_pair_config_state AS
     ORDER BY `contract_address` ASC;
 
 
--- spacebox.dex_vaults_config_event_writer source
+-- spacebox.preparsed_dex_vaults_config_event_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_vaults_config_event_writer TO spacebox.dex_vaults_config_event (
+CREATE MATERIALIZED VIEW spacebox.preparsed_dex_vaults_config_event_writer TO spacebox.dex_vaults_config_event (
     `timestamp`                 DateTime64(9),
     `height`                    Int64,
     `block_part_index`          Int8,
@@ -214,35 +214,35 @@ CREATE MATERIALIZED VIEW spacebox.dex_vaults_config_event_writer TO spacebox.dex
 WITH
     -- define event_tuple parts for row fields
     event_tuple.1 as `event_index`,
-    event_tuple.2 as `event_attributes`,
+    event_tuple.2 as `event_attributes_parsed`,
     event_tuple.3 as `attributes`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'owner'), `event_attributes`), 'value') AS `attr_owner`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_denom'), `event_attributes`), 'value') AS `attr_token_0_denom`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_denom'), `event_attributes`), 'value') AS `attr_token_1_denom`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_symbol'), `event_attributes`), 'value') AS `attr_token_0_symbol`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_symbol'), `event_attributes`), 'value') AS `attr_token_1_symbol`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_quote_currency'), `event_attributes`), 'value') AS `attr_token_0_quote_currency`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_quote_currency'), `event_attributes`), 'value') AS `attr_token_1_quote_currency`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_exponent'), `event_attributes`), 'value') AS `attr_token_0_exponent`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_exponent'), `event_attributes`), 'value') AS `attr_token_1_exponent`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_decimals'), `event_attributes`), 'value') AS `attr_token_0_decimals`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_decimals'), `event_attributes`), 'value') AS `attr_token_1_decimals`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_a'), `event_attributes`), 'value') AS `attr_max_blocks_stale_token_a`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_b'), `event_attributes`), 'value') AS `attr_max_blocks_stale_token_b`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_0'), `event_attributes`), 'value') AS `attr_max_blocks_stale_token_0`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'max_blocks_stale_token_1'), `event_attributes`), 'value') AS `attr_max_blocks_stale_token_1`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'pool_id'), `event_attributes`), 'value') AS `attr_pool_id`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'deposit_cap'), `event_attributes`), 'value') AS `attr_deposit_cap`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'timestamp_stale'), `event_attributes`), 'value') AS `attr_timestamp_stale`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'fee_tier_config'), `event_attributes`), 'value') AS `attr_fee_tier_config`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'paused'), `event_attributes`), 'value') AS `attr_paused`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'skew'), `event_attributes`), 'value') AS `attr_skew`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'imbalance'), `event_attributes`), 'value') AS `attr_imbalance`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'oracle_contract'), `event_attributes`), 'value') AS `attr_oracle_contract`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'oracle_price_skew'), `event_attributes`), 'value') AS `attr_oracle_price_skew`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'denom'), `event_attributes`), 'value') AS `attr_denom`,
+    (arrayFirst(attr -> (attr.1 = '_contract_address'), `event_attributes_parsed`)).2 AS `contract_address`,
+    (arrayFirst(attr -> (attr.1 = 'action'), `event_attributes_parsed`)).2 AS `action`,
+    (arrayFirst(attr -> (attr.1 = 'owner'), `event_attributes_parsed`)).2 AS `attr_owner`,
+    (arrayFirst(attr -> (attr.1 = 'token_0_denom'), `event_attributes_parsed`)).2 AS `attr_token_0_denom`,
+    (arrayFirst(attr -> (attr.1 = 'token_1_denom'), `event_attributes_parsed`)).2 AS `attr_token_1_denom`,
+    (arrayFirst(attr -> (attr.1 = 'token_0_symbol'), `event_attributes_parsed`)).2 AS `attr_token_0_symbol`,
+    (arrayFirst(attr -> (attr.1 = 'token_1_symbol'), `event_attributes_parsed`)).2 AS `attr_token_1_symbol`,
+    (arrayFirst(attr -> (attr.1 = 'token_0_quote_currency'), `event_attributes_parsed`)).2 AS `attr_token_0_quote_currency`,
+    (arrayFirst(attr -> (attr.1 = 'token_1_quote_currency'), `event_attributes_parsed`)).2 AS `attr_token_1_quote_currency`,
+    (arrayFirst(attr -> (attr.1 = 'token_0_exponent'), `event_attributes_parsed`)).2 AS `attr_token_0_exponent`,
+    (arrayFirst(attr -> (attr.1 = 'token_1_exponent'), `event_attributes_parsed`)).2 AS `attr_token_1_exponent`,
+    (arrayFirst(attr -> (attr.1 = 'token_0_decimals'), `event_attributes_parsed`)).2 AS `attr_token_0_decimals`,
+    (arrayFirst(attr -> (attr.1 = 'token_1_decimals'), `event_attributes_parsed`)).2 AS `attr_token_1_decimals`,
+    (arrayFirst(attr -> (attr.1 = 'max_blocks_stale_token_a'), `event_attributes_parsed`)).2 AS `attr_max_blocks_stale_token_a`,
+    (arrayFirst(attr -> (attr.1 = 'max_blocks_stale_token_b'), `event_attributes_parsed`)).2 AS `attr_max_blocks_stale_token_b`,
+    (arrayFirst(attr -> (attr.1 = 'max_blocks_stale_token_0'), `event_attributes_parsed`)).2 AS `attr_max_blocks_stale_token_0`,
+    (arrayFirst(attr -> (attr.1 = 'max_blocks_stale_token_1'), `event_attributes_parsed`)).2 AS `attr_max_blocks_stale_token_1`,
+    (arrayFirst(attr -> (attr.1 = 'pool_id'), `event_attributes_parsed`)).2 AS `attr_pool_id`,
+    (arrayFirst(attr -> (attr.1 = 'deposit_cap'), `event_attributes_parsed`)).2 AS `attr_deposit_cap`,
+    (arrayFirst(attr -> (attr.1 = 'timestamp_stale'), `event_attributes_parsed`)).2 AS `attr_timestamp_stale`,
+    (arrayFirst(attr -> (attr.1 = 'fee_tier_config'), `event_attributes_parsed`)).2 AS `attr_fee_tier_config`,
+    (arrayFirst(attr -> (attr.1 = 'paused'), `event_attributes_parsed`)).2 AS `attr_paused`,
+    (arrayFirst(attr -> (attr.1 = 'skew'), `event_attributes_parsed`)).2 AS `attr_skew`,
+    (arrayFirst(attr -> (attr.1 = 'imbalance'), `event_attributes_parsed`)).2 AS `attr_imbalance`,
+    (arrayFirst(attr -> (attr.1 = 'oracle_contract'), `event_attributes_parsed`)).2 AS `attr_oracle_contract`,
+    (arrayFirst(attr -> (attr.1 = 'oracle_price_skew'), `event_attributes_parsed`)).2 AS `attr_oracle_price_skew`,
+    (arrayFirst(attr -> (attr.1 = 'denom'), `event_attributes_parsed`)).2 AS `attr_denom`,
     extractAll(`attr_owner`, '(?:Addr\(\"(\w+)\"\))') as `attr_owner_array`,
     arrayMap(
         (match) -> (toUInt64OrZero(match[1]), toUInt64OrZero(match[2])),
@@ -339,48 +339,52 @@ SELECT
     if (empty(`attr_oracle_contract`), NULL, `attr_oracle_contract`) as `oracle_contract`,
     toInt32OrNull(`attr_oracle_price_skew`) as `oracle_price_skew`,
     if (empty(`attr_denom`), NULL, `attr_denom`) as `denom`
-FROM spacebox.message_event
+FROM spacebox.parsed_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
         arrayMap(
-            (msg_event, msg_event_index) -> arrayMap(
-                (msg_event_attributes) -> (
+            (msg_event_parsed, msg_event_index) -> arrayMap(
+                (msg_event_attributes_parsed) -> (
                     -- event_tuple.1: event_index
                     toInt32(`msg_events_index_offset` + msg_event_index - 1),
-                    -- event_tuple.2: event_attributes
-                    msg_event_attributes,
+                    -- event_tuple.2: msg_event_attributes_parsed
+                    msg_event_attributes_parsed,
                     -- event_tuple.3: event_attributes (string)
-                    JSONExtractString(msg_event, 'attributes')
+                    toJSONString(
+                        arrayMap(
+                            (attr) -> map('key', (attr).1, 'value', (attr).2, 'index', toString((attr).3)),
+                            msg_event_parsed.2
+                        )
+                    )
                 ),
                 -- filter to only successful execution events
                 arrayFilter(
-                    (msg_event_attributes) -> (
+                    (msg_event_attributes_parsed) -> (
                         -- is action=("instantiate IMM" OR "update_config" OR "create_token")
-                        JSONExtractString(
+                        (
                             arrayFirst(
-                                (attr) -> JSONExtractString(attr, 'key') = 'action',
-                                msg_event_attributes
-                            ),
-                            'value'
-                        ) in (
+                                (attr) -> attr.1 = 'action',
+                                msg_event_attributes_parsed
+                            )
+                        ).2 in (
                             'instantiate IMM',
                             'update_config',
                             'create_token'
                         )
                     ),
                     arrayMap(
-                        (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                        (msg_event_parsed) -> msg_event_parsed.2,
                         arrayFilter(
-                            msg_event -> JSONExtractString(msg_event, 'type') = 'wasm',
-                            [msg_event]
+                            msg_event_parsed -> msg_event_parsed.1 = 'wasm',
+                            [msg_event_parsed]
                         )
                     )
                 )
             ),
             -- enumerate each (msg_event, msg_event_index) within a message part
-            `msg_events`,
-            arrayEnumerate(`msg_events`)
+            `msg_events_parsed`,
+            arrayEnumerate(`msg_events_parsed`)
         )
     )
 ) AS `event_tuple`

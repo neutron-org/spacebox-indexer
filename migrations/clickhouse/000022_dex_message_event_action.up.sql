@@ -31,9 +31,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_message_event_action_writer source
+-- spacebox.preparsed_dex_message_event_action_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_message_event_action_writer TO spacebox.dex_message_event_action (
+CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_action_writer TO spacebox.dex_message_event_action (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -57,9 +57,14 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_action_writer TO spacebox.de
         `event_index`,
         `event_type` as `type`,
         -- add event attributes
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), JSONExtractArrayRaw(`event_attributes`)), 'value') AS `action`,
-        `event_attributes` as `attributes`
-    FROM spacebox.dex_message_event
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'action'), `event_attributes`), 2) AS `action`,
+        toJSONString(
+            arrayMap(
+                (attr) -> map('key', (attr).1, 'value', (attr).2, 'index', toString((attr).3)),
+                `event_attributes`
+            )
+        ) as `attributes`
+    FROM spacebox.parsed_dex_message_event
     ARRAY JOIN (
         -- Extract "message part" events with event_index
         arrayFlatten(
@@ -69,26 +74,26 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_action_writer TO spacebox.de
                         -- event_tuple.1: event_index
                         toInt32(`msg_part_events_index_offset` + msg_part_event_index - 1),
                         -- event_tuple.2: event_type
-                        JSONExtractString(dex_event, 'type'),
+                        tupleElement(dex_event, 1),
                         -- event_tuple.3: event_attributes
-                        JSONExtractString(dex_event, 'attributes')
+                        tupleElement(dex_event, 2)
                     ),
                     -- filter to only possible DEX action events
                     arrayFilter(
-                        msg_part_event -> JSONExtractString(msg_part_event, 'type') = 'message',
+                        msg_part_event -> tupleElement(msg_part_event, 1) = 'message',
                         [msg_part_event]
                     )
                 ),
                 -- enumerate each (msg_part_event, msg_part_event_index) within a message part
-                `msg_part_events`,
-                arrayEnumerate(`msg_part_events`)
+                `msg_part_events_parsed`,
+                arrayEnumerate(`msg_part_events_parsed`)
             )
         )
     ) AS `event_tuple`
     -- select only DEX actions
     WHERE
         `action` != '' AND
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'module'), JSONExtractArrayRaw(`event_attributes`)), 'value') = 'dex'
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'module'), `event_attributes`), 2) = 'dex'
 SETTINGS
     -- allow bigger blocks because transformation is easier
     max_block_size = 1000;

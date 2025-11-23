@@ -62,9 +62,9 @@ CREATE VIEW spacebox.bank_transfer_state AS
     GROUP BY `denom`, `address`;
 
 
--- spacebox.bank_transfer_writer source
+-- spacebox.preparsed_bank_transfer_writer source
 
-CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer (
+CREATE MATERIALIZED VIEW spacebox.preparsed_bank_transfer_writer TO spacebox.bank_transfer (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -99,12 +99,12 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
         toUInt128OrZero(extract(`event_coins`, '^(\\d+)')) AS `amount`,
         -- append original coin string before parsing
         `event_coins` as `coins`
-    FROM spacebox.message_event
+    FROM spacebox.parsed_event
     ARRAY JOIN (
         -- Extract "message part" events with event_index
         arrayFlatten(
             arrayMap(
-                (msg_event, msg_event_index) -> arrayMap(
+                (msg_event_parsed, msg_event_index) -> arrayMap(
                     (event_type) -> arrayMap(
                         (event_attributes) -> arrayMap(
                             (coins_array_string, event_address) -> arrayMap(
@@ -124,28 +124,28 @@ CREATE MATERIALIZED VIEW spacebox.bank_transfer_writer TO spacebox.bank_transfer
                                 arrayEnumerate(splitByChar(',', coins_array_string))
                             ),
                             -- extract amount string
-                            [JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'amount'), event_attributes), 'value')],
+                            [(arrayFirst(x -> (x.1 = 'amount'), event_attributes)).2],
                             -- extract address string
                             [if(
                                 event_type = 'coin_spent',
-                                JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'spender'), event_attributes), 'value'),
-                                JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'receiver'), event_attributes), 'value')
+                                (arrayFirst(x -> (x.1 = 'spender'), event_attributes)).2,
+                                (arrayFirst(x -> (x.1 = 'receiver'), event_attributes)).2
                             )]
                         ),
-                        [JSONExtractArrayRaw(msg_event, 'attributes')]
+                        [msg_event_parsed.2]
                     ),
                     -- filter to events for table
                     arrayFilter(
                         (event_type) -> event_type in ('coin_spent', 'coin_received'),
                         arrayMap(
-                            (msg_event) -> JSONExtractString(msg_event, 'type'),
-                            [msg_event]
+                            (msg_event_parsed) -> msg_event_parsed.1,
+                            [msg_event_parsed]
                         )
                     )
                 ),
                 -- enumerate each (msg_event, msg_event_index) within a message
-                `msg_events`,
-                arrayEnumerate(`msg_events`)
+                `msg_events_parsed`,
+                arrayEnumerate(`msg_events_parsed`)
             )
         )
     ) AS `event_tuple`;

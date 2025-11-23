@@ -47,9 +47,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_message_event_tick_update_writer source
+-- spacebox.preparsed_dex_message_event_tick_update_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spacebox.dex_message_event_tick_update (
+CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_tick_update_writer TO spacebox.dex_message_event_tick_update (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -89,27 +89,27 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
         `event_index`,
         `event_type` as `type`,
         -- add event attributes
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenOne'), `event_attributes`), 'value') AS `TokenOne`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenIn'), `event_attributes`), 'value') AS `TokenIn`,
-        toInt32(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TickIndex'), `event_attributes`), 'value')) AS `TickIndex`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'action'), `event_attributes`), 2) AS `action`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TokenZero'), `event_attributes`), 2) AS `TokenZero`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TokenOne'), `event_attributes`), 2) AS `TokenOne`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TokenIn'), `event_attributes`), 2) AS `TokenIn`,
+        toInt32(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TickIndex'), `event_attributes`), 2)) AS `TickIndex`,
         -- fix accidental incorrect Fee values added to tranche-ticks before v4 (see https://github.com/neutron-org/neutron/pull/473)
         -- tranches are always effectively a 0% LP fee
         if(
             notEmpty(`TrancheKey`),
             0,
-            toUInt64OrZero(JSONExtractString(arrayLast(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value'))
+            toUInt64OrZero(tupleElement(arrayLast(x -> (tupleElement(x, 1) = 'Fee'), `event_attributes`), 2))
         ) AS `Fee`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TrancheKey'), `event_attributes`), 'value') AS `TrancheKey`,
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Reserves'), `event_attributes`), 'value')) AS `Reserves`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TrancheKey'), `event_attributes`), 2) AS `TrancheKey`,
+        toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'Reserves'), `event_attributes`), 2)) AS `Reserves`,
         -- add new fields after DEX v5 (see https://github.com/neutron-org/neutron/pull/808)
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountIn'), `event_attributes`), 'value')) AS `SwapAmountIn`,
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SwapAmountOut'), `event_attributes`), 'value')) AS `SwapAmountOut`,
+        toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'SwapAmountIn'), `event_attributes`), 2)) AS `SwapAmountIn`,
+        toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'SwapAmountOut'), `event_attributes`), 2)) AS `SwapAmountOut`,
         -- add computed `is_swap` field for DEX v1-5 swap-volume fix
         if (`SwapAmountIn` > 0, 1, `is_pre_v6_estimated_swap`) as `is_swap`,
         if (`SwapAmountIn` > 0, 0, `is_pre_v6_estimated_swap`)  as `is_estimated_swap`
-    FROM spacebox.dex_message_event
+    FROM spacebox.parsed_dex_message_event
     ARRAY JOIN (
         -- Extract "message part" events with tx_index
         arrayFlatten(
@@ -122,24 +122,24 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                     -- event_tuple.1: event_index
                                     toInt32(`msg_part_events_index_offset` + msg_part_event_index - 1),
                                     -- event_tuple.2: event_type
-                                    JSONExtractString(tick_update_event, 'type'),
+                                    tupleElement(tick_update_event, 1),
                                     -- event_tuple.3: event_attributes
-                                    JSONExtractArrayRaw(tick_update_event, 'attributes'),
+                                    tupleElement(tick_update_event, 2),
                                     -- event_tuple.4: is_pre_v6_estimated_swap
                                     is_v6 = 0 AND
                                     notEmpty(related_msg_dex_received_denom) AND
                                     -- is_swap part: exclude if event denom is the related msg dex received denom
-                                    related_msg_dex_received_denom != JSONExtractString(
+                                    related_msg_dex_received_denom != tupleElement(
                                         arrayFirst(
-                                            x -> JSONExtractString(x, 'key') = 'TokenIn',
-                                            JSONExtractArrayRaw(tick_update_event, 'attributes')
+                                            x -> tupleElement(x, 1) = 'TokenIn',
+                                            tupleElement(tick_update_event, 2)
                                         ),
-                                        'value'
+                                        2
                                     )
                                 ),
                                 -- filter to only TickUpdate events
                                 arrayFilter(
-                                    msg_part_event -> JSONExtractString(msg_part_event, 'type') = 'TickUpdate',
+                                    msg_part_event -> tupleElement(msg_part_event, 1) = 'TickUpdate',
                                     [msg_part_event]
                                 )
                             ),
@@ -150,8 +150,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                         -- precompute related_msg "fields" as arrayMap lambda arguments
                         -- - related_msg "field" related_msg_dex_received_denom
                         [if(
-                            notEmpty(related_msg_dex_spent_event) AND
-                            notEmpty(related_msg_dex_received_event),
+                            notEmpty(related_msg_dex_spent_event.1) AND
+                            notEmpty(related_msg_dex_received_event.1),
                             -- calculate related msg dex received denom
                             regexpExtract(
                                 arrayFirst(
@@ -159,12 +159,12 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                     -- separate out each denom in the coin event
                                     splitByChar(
                                         ',',
-                                        JSONExtractString(
+                                        tupleElement(
                                             arrayFirst(
-                                                (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                                JSONExtractArrayRaw(related_msg_dex_received_event, 'attributes')
+                                                (attr) -> (tupleElement(attr, 1) = 'amount'),
+                                                tupleElement(related_msg_dex_received_event, 2)
                                             ),
-                                            'value'
+                                            2
                                         )
                                     )
                                 ),
@@ -175,14 +175,14 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                         )],
                         -- - related_msg "field" is_v6 (to flag what is a v6 swap)
                         [
-                            notEmpty(related_msg_dex_spent_event) AND
-                            notEmpty(related_msg_dex_received_event) AND
+                            notEmpty(related_msg_dex_spent_event.1) AND
+                            notEmpty(related_msg_dex_received_event.1) AND
                             arrayExists(
                                 (msg_part_event) -> (
-                                    JSONExtractString(msg_part_event, 'type') = 'TickUpdate' AND
+                                    tupleElement(msg_part_event, 1) = 'TickUpdate' AND
                                     arrayExists(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'SwapAmountIn',
-                                        JSONExtractArrayRaw(msg_part_event, 'attributes')
+                                        (attr) -> tupleElement(attr, 1) = 'SwapAmountIn',
+                                        tupleElement(msg_part_event, 2)
                                     )
                                 ),
                                 dex_msg_part_events
@@ -199,12 +199,12 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                 -- separate out each denom in the coin event
                                 splitByChar(
                                     ',',
-                                    JSONExtractString(
+                                    tupleElement(
                                         arrayFirst(
-                                            (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                            JSONExtractArrayRaw(related_msg_event, 'attributes')
+                                            (attr) -> (tupleElement(attr, 1) = 'amount'),
+                                            tupleElement(related_msg_event, 2)
                                         ),
-                                        'value'
+                                        2
                                     )
                                 )
                             )
@@ -212,13 +212,13 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                         -- filter related msg events to 'coin_spent' events
                         arrayFilter(
                             (related_msg_event) -> (
-                                JSONExtractString(related_msg_event, 'type') = 'coin_spent' AND
+                                tupleElement(related_msg_event, 1) = 'coin_spent' AND
                                 arrayExists(
                                     (related_msg_event_attributes) -> (
-                                        JSONExtractString(related_msg_event_attributes, 'key') = 'spender' AND
-                                        JSONExtractString(related_msg_event_attributes, 'value') = dex_address
+                                        tupleElement(related_msg_event_attributes, 1) = 'spender' AND
+                                        tupleElement(related_msg_event_attributes, 2) = dex_address
                                     ),
-                                    JSONExtractArrayRaw(related_msg_event, 'attributes')
+                                    tupleElement(related_msg_event, 2)
                                 )
                             ),
                             dex_msg_part_events
@@ -233,12 +233,12 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                                 -- separate out each denom in the coin event
                                 splitByChar(
                                     ',',
-                                    JSONExtractString(
+                                    tupleElement(
                                         arrayFirst(
-                                            (attr) -> (JSONExtractString(attr, 'key') = 'amount'),
-                                            JSONExtractArrayRaw(related_msg_event, 'attributes')
+                                            (attr) -> (tupleElement(attr, 1) = 'amount'),
+                                            tupleElement(related_msg_event, 2)
                                         ),
-                                        'value'
+                                        2
                                     )
                                 )
                             )
@@ -246,13 +246,13 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                         -- filter related msg events to 'coin_received' events
                         arrayFilter(
                             (related_msg_event) -> (
-                                JSONExtractString(related_msg_event, 'type') = 'coin_received' AND
+                                tupleElement(related_msg_event, 1) = 'coin_received' AND
                                 arrayExists(
                                     (related_msg_event_attributes) -> (
-                                        JSONExtractString(related_msg_event_attributes, 'key') = 'receiver' AND
-                                        JSONExtractString(related_msg_event_attributes, 'value') = dex_address
+                                        tupleElement(related_msg_event_attributes, 1) = 'receiver' AND
+                                        tupleElement(related_msg_event_attributes, 2) = dex_address
                                     ),
-                                    JSONExtractArrayRaw(related_msg_event, 'attributes')
+                                    tupleElement(related_msg_event, 2)
                                 )
                             ),
                             dex_msg_part_events
@@ -262,11 +262,11 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_update_writer TO spaceb
                 -- filter to only messages that contain a tick update
                 -- this allows us to calculate the dex_spent_event and dex_received_event for all tick parts only once
                 arrayFilter(
-                    (msg_part_events) -> arrayExists(
-                        (msg_part_event) -> JSONExtractString(msg_part_event, 'type') = 'TickUpdate',
-                        msg_part_events
+                    (msg_part_events_parsed) -> arrayExists(
+                        (msg_part_event) -> tupleElement(msg_part_event, 1) = 'TickUpdate',
+                        msg_part_events_parsed
                     ),
-                    [`msg_part_events`]
+                    [`msg_part_events_parsed`]
                 )
             )
         )

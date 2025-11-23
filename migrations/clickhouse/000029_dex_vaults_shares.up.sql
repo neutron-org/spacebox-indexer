@@ -58,9 +58,9 @@ CREATE VIEW spacebox.dex_vaults_shares_state AS
     GROUP BY `contract_address`;
 
 
--- spacebox.dex_vaults_shares_deposit_writer source
+-- spacebox.preparsed_dex_vaults_shares_deposit_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_deposit_writer TO spacebox.dex_vaults_shares (
+CREATE MATERIALIZED VIEW spacebox.preparsed_dex_vaults_shares_deposit_writer TO spacebox.dex_vaults_shares (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -90,130 +90,130 @@ SELECT
     `tx_index`,
     `event_index`,
     -- add event attributes
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'sender'), `related_message_event_attributes`), 'value') AS `creator`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_0_deposited'), `event_attributes`), 'value')) AS `token_0_deposited`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'token_1_deposited'), `event_attributes`), 'value')) AS `token_1_deposited`,
+    tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'sender'), `related_message_event_attributes`), 2) AS `creator`,
+    tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'action'), `event_attributes`), 2) AS `action`,
+    tupleElement(arrayFirst(x -> (tupleElement(x, 1) = '_contract_address'), `event_attributes`), 2) AS `contract_address`,
+    toUInt128OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'token_0_deposited'), `event_attributes`), 2)) AS `token_0_deposited`,
+    toUInt128OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'token_1_deposited'), `event_attributes`), 2)) AS `token_1_deposited`,
     0 AS `token_0_withdrawn`,
     0 AS `token_1_withdrawn`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'minted_amount'), `event_attributes`), 'value')) AS `shares_in`,
+    toUInt128OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'minted_amount'), `event_attributes`), 2)) AS `shares_in`,
     0 AS `shares_out`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'total_shares'), `event_attributes`), 'value')) AS `total_shares`
-FROM spacebox.message_event
+    toUInt128OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'total_shares'), `event_attributes`), 2)) AS `total_shares`
+FROM spacebox.parsed_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
         arrayMap(
             (msg_tf_mint_event_attributes) -> arrayMap(
-                (msg_event, msg_event_index) -> arrayMap(
+                (msg_event_parsed, msg_event_index) -> arrayMap(
                     (msg_event_attributes) -> (
                         -- event_tuple.1: event_index
                         toInt32(`msg_events_index_offset` + msg_event_index - 1),
                         -- event_tuple.2: related message event attributes
-                        JSONExtractArrayRaw(
+                        tupleElement(
                             arrayFirst(
-                                (msg_event) -> (
-                                    JSONExtractString(msg_event, 'type') = 'message' AND
+                                (msg_event_parsed) -> (
+                                    msg_event_parsed.1 = 'message' AND
                                     arrayExists(
                                         (attr) -> (
-                                            JSONExtractString(attr, 'key') = 'action' AND
-                                            JSONExtractString(attr, 'value') = '/cosmwasm.wasm.v1.MsgExecuteContract'
+                                            tupleElement(attr, 1) = 'action' AND
+                                            tupleElement(attr, 2) = '/cosmwasm.wasm.v1.MsgExecuteContract'
                                         ),
-                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                        msg_event_parsed.2
                                     )
                                 ),
-                                `msg_events`
+                                `msg_events_parsed`
                             ),
-                            'attributes'
+                            2
                         ),
                         -- event_tuple.3: event_attributes
                         msg_event_attributes
                     ),
                     -- filter to only successful execution events
                     arrayFilter(
-                        (msg_event_attributes) -> (
+                        (msg_event_attributes_parsed) -> (
                             -- is action="deposit"
-                            JSONExtractString(
+                            tupleElement(
                                 arrayFirst(
-                                    (attr) -> JSONExtractString(attr, 'key') = 'action',
-                                    msg_event_attributes
+                                    (attr) -> attr.1 = 'action',
+                                    msg_event_attributes_parsed
                                 ),
-                                'value'
+                                2
                             ) = 'deposit' AND
                             -- has total_shares>0
                             toUInt128OrZero(
-                                JSONExtractString(
+                                tupleElement(
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'total_shares',
-                                        msg_event_attributes
+                                        (attr) -> attr.1 = 'total_shares',
+                                        msg_event_attributes_parsed
                                     ),
-                                    'value'
+                                    2
                                 )
                             ) > 0 AND
                             -- matches tf_mint event contract address
                             has(
                                 [
-                                    JSONExtractString(
+                                    tupleElement(
                                         arrayFirst(
-                                            (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
-                                            msg_event_attributes
+                                            (attr) -> attr.1 = '_contract_address',
+                                            msg_event_attributes_parsed
                                         ),
-                                        'value'
+                                        2
                                     ),
-                                    JSONExtractString(
+                                    tupleElement(
                                         arrayFirst(
-                                            (attr) -> JSONExtractString(attr, 'key') = 'from',
-                                            msg_event_attributes
+                                            (attr) -> attr.1 = 'from',
+                                            msg_event_attributes_parsed
                                         ),
-                                        'value'
+                                        2
                                     )
                                 ],
-                                JSONExtractString(
+                                tupleElement(
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'mint_to_address',
+                                        (attr) -> attr.1 = 'mint_to_address',
                                         msg_tf_mint_event_attributes
                                     ),
-                                    'value'
+                                    2
                                 )
                             ) AND
                             -- matches tf_mint event amount
-                            JSONExtractString(
+                            tupleElement(
                                 arrayFirst(
-                                    (attr) -> JSONExtractString(attr, 'key') = 'minted_amount',
-                                    msg_event_attributes
+                                    (attr) -> attr.1 = 'minted_amount',
+                                    msg_event_attributes_parsed
                                 ),
-                                'value'
+                                2
                             ) = regexpExtract(
-                                JSONExtractString(
+                                tupleElement(
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'amount',
+                                        (attr) -> attr.1 = 'amount',
                                         msg_tf_mint_event_attributes
                                     ),
-                                    'value'
+                                    2
                                 ),
                                 '^(\\d+)'
                             )
                         ),
                         arrayMap(
-                            (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                            (msg_event_parsed) -> msg_event_parsed.2,
                             arrayFilter(
-                                msg_event -> JSONExtractString(msg_event, 'type') = 'wasm',
-                                [msg_event]
+                                msg_event_parsed -> msg_event_parsed.1 = 'wasm',
+                                [msg_event_parsed]
                             )
                         )
                     )
                 ),
-                -- enumerate each (msg_event, msg_event_index) within a message part
-                `msg_events`,
-                arrayEnumerate(`msg_events`)
+                -- enumerate each (msg_event_parsed, msg_event_index) within a message part
+                `msg_events_parsed`,
+                arrayEnumerate(`msg_events_parsed`)
             ),
             -- get tf_mint event attributes (if it exists)
             arrayMap(
-                (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                (msg_event_parsed) -> msg_event_parsed.2,
                 arrayFilter(
-                    (msg_event) -> JSONExtractString(msg_event, 'type') = 'tf_mint',
-                    `msg_events`
+                    (msg_event_parsed) -> msg_event_parsed.1 = 'tf_mint',
+                    `msg_events_parsed`
                 )
             )
         )
@@ -222,9 +222,9 @@ ARRAY JOIN (
 WHERE notEmpty(`creator`);
 
 
--- spacebox.dex_vaults_shares_withdrawal_writer source
+-- spacebox.preparsed_dex_vaults_shares_withdrawal_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_withdrawal_writer TO spacebox.dex_vaults_shares (
+CREATE MATERIALIZED VIEW spacebox.preparsed_dex_vaults_shares_withdrawal_writer TO spacebox.dex_vaults_shares (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -254,18 +254,18 @@ SELECT
     `tx_index`,
     `event_index`,
     -- add event attributes
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'sender'), `related_message_event_attributes`), 'value') AS `creator`,
+    tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'sender'), `related_message_event_attributes`), 2) AS `creator`,
     -- note: save "withdrawal_reply_success" as "withdrawal"
     'withdrawal' AS `action`,
-    JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = '_contract_address'), `event_attributes`), 'value') AS `contract_address`,
+    tupleElement(arrayFirst(x -> (tupleElement(x, 1) = '_contract_address'), `event_attributes`), 2) AS `contract_address`,
     0 AS `token_0_deposited`,
     0 AS `token_1_deposited`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') IN ('withdraw_amount_0', 'withdrawn_token_0')), `event_attributes`), 'value')) AS `token_0_withdrawn`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') IN ('withdraw_amount_1', 'withdrawn_token_1')), `event_attributes`), 'value')) AS `token_1_withdrawn`,
+    toUInt128OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) IN ('withdraw_amount_0', 'withdrawn_token_0')), `event_attributes`), 2)) AS `token_0_withdrawn`,
+    toUInt128OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) IN ('withdraw_amount_1', 'withdrawn_token_1')), `event_attributes`), 2)) AS `token_1_withdrawn`,
     0 AS `shares_in`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'shares_burned'), `event_attributes`), 'value')) AS `shares_out`,
-    toUInt128OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'total_shares'), `event_attributes`), 'value')) AS `total_shares`
-FROM spacebox.message_event
+    toUInt128OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'shares_burned'), `event_attributes`), 2)) AS `shares_out`,
+    toUInt128OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'total_shares'), `event_attributes`), 2)) AS `total_shares`
+FROM spacebox.parsed_event
 ARRAY JOIN (
     -- Extract "message part" events with event_index
     arrayFlatten(
@@ -276,21 +276,21 @@ ARRAY JOIN (
                         -- event_tuple.1: event_index
                         toInt32(`msg_events_index_offset` + msg_event_index - 1),
                         -- event_tuple.2: related message event attributes
-                        JSONExtractArrayRaw(
+                        tupleElement(
                             arrayFirst(
                                 (msg_event) -> (
-                                    JSONExtractString(msg_event, 'type') = 'message' AND
+                                    tupleElement(msg_event, 1) = 'message' AND
                                     arrayExists(
                                         (attr) -> (
-                                            JSONExtractString(attr, 'key') = 'action' AND
-                                            JSONExtractString(attr, 'value') = '/cosmwasm.wasm.v1.MsgExecuteContract'
+                                            tupleElement(attr, 1) = 'action' AND
+                                            tupleElement(attr, 2) = '/cosmwasm.wasm.v1.MsgExecuteContract'
                                         ),
-                                        JSONExtractArrayRaw(msg_event, 'attributes')
+                                        tupleElement(msg_event, 2)
                                     )
                                 ),
-                                `msg_events`
+                                `msg_events_parsed`
                             ),
-                            'attributes'
+                            2
                         ),
                         -- event_tuple.3: event_attributes
                         msg_event_attributes
@@ -299,74 +299,74 @@ ARRAY JOIN (
                     arrayFilter(
                         (msg_event_attributes) -> (
                             -- is action="withdrawal"
-                            JSONExtractString(
+                            tupleElement(
                                 arrayFirst(
-                                    (attr) -> JSONExtractString(attr, 'key') = 'action',
+                                    (attr) -> tupleElement(attr, 1) = 'action',
                                     msg_event_attributes
                                 ),
-                                'value'
+                                2
                             ) IN ('withdrawal', 'withdrawal_reply_success') AND
                             -- has shares_burned>0
                             toUInt128OrZero(
-                                JSONExtractString(
+                                tupleElement(
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'shares_burned',
+                                        (attr) -> tupleElement(attr, 1) = 'shares_burned',
                                         msg_event_attributes
                                     ),
-                                    'value'
+                                    2
                                 )
                             ) > 0 AND
                             -- matches tf_burn event contract address
-                            JSONExtractString(
+                            tupleElement(
                                 arrayFirst(
-                                    (attr) -> JSONExtractString(attr, 'key') = '_contract_address',
+                                    (attr) -> tupleElement(attr, 1) = '_contract_address',
                                     msg_event_attributes
                                 ),
-                                'value'
-                            ) = JSONExtractString(
+                                2
+                            ) = tupleElement(
                                 arrayFirst(
-                                    (attr) -> JSONExtractString(attr, 'key') = 'burn_from_address',
+                                    (attr) -> tupleElement(attr, 1) = 'burn_from_address',
                                     msg_tf_burn_event_attributes
                                 ),
-                                'value'
+                                2
                             ) AND
                             -- matches tf_burn event amount
-                            JSONExtractString(
+                            tupleElement(
                                 arrayFirst(
-                                    (attr) -> JSONExtractString(attr, 'key') = 'shares_burned',
+                                    (attr) -> tupleElement(attr, 1) = 'shares_burned',
                                     msg_event_attributes
                                 ),
-                                'value'
+                                2
                             ) = regexpExtract(
-                                JSONExtractString(
+                                tupleElement(
                                     arrayFirst(
-                                        (attr) -> JSONExtractString(attr, 'key') = 'amount',
+                                        (attr) -> tupleElement(attr, 1) = 'amount',
                                         msg_tf_burn_event_attributes
                                     ),
-                                    'value'
+                                    2
                                 ),
                                 '^(\\d+)'
                             )
                         ),
                         arrayMap(
-                            (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                            (msg_event) -> tupleElement(msg_event, 2),
                             arrayFilter(
-                                msg_event -> JSONExtractString(msg_event, 'type') = 'wasm',
+                                msg_event -> tupleElement(msg_event, 1) = 'wasm',
                                 [msg_event]
                             )
                         )
                     )
                 ),
                 -- enumerate each (msg_event, msg_event_index) within a message part
-                `msg_events`,
-                arrayEnumerate(`msg_events`)
+                `msg_events_parsed`,
+                arrayEnumerate(`msg_events_parsed`)
             ),
             -- get tf_burn event attributes (if it exists)
             arrayMap(
-                (msg_event) -> JSONExtractArrayRaw(msg_event, 'attributes'),
+                (msg_event) -> tupleElement(msg_event, 2),
                 arrayFilter(
-                    (msg_event) -> JSONExtractString(msg_event, 'type') = 'tf_burn',
-                    `msg_events`
+                    (msg_event) -> tupleElement(msg_event, 1) = 'tf_burn',
+                    `msg_events_parsed`
                 )
             )
         )

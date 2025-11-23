@@ -1,5 +1,5 @@
 
-CREATE TABLE spacebox.dex_message_event
+CREATE TABLE spacebox.parsed_dex_message_event
 (
     `timestamp`                     DateTime64(9),
     `height`                        Int64,
@@ -12,7 +12,18 @@ CREATE TABLE spacebox.dex_message_event
     `wasm_part_index`               Int16,
     -- event data
     `msg_part_events_index_offset`  Int32,
-    `msg_part_events`               Array(String),
+    `msg_part_events_parsed`        Array(
+        Tuple(
+            `type` LowCardinality(String),
+            `attributes` Array(
+                Tuple(
+                    `key` String,
+                    `value` String,
+                    `index` Boolean
+                )
+            )
+        )
+    ),
     `msg_part_label`                LowCardinality(String),
     -- add data skipping index for time queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax
@@ -29,9 +40,9 @@ ORDER BY (
 TTL timestamp + toIntervalDay(30)
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_message_event_writer source
+-- spacebox.dex_message_parsed_event_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_message_event_writer TO spacebox.dex_message_event
+CREATE MATERIALIZED VIEW spacebox.dex_message_parsed_event_writer TO spacebox.parsed_dex_message_event
 (
     `timestamp`                     DateTime64(9),
     `height`                        Int64,
@@ -44,12 +55,23 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_writer TO spacebox.dex_messa
     `wasm_part_index`               Int16,
     -- event data
     `msg_part_events_index_offset`  Int32,
-    `msg_part_events`               Array(String),
+    `msg_part_events`               Array(
+        Tuple(
+            `type` LowCardinality(String),
+            `attributes` Array(
+                Tuple(
+                    `key` String,
+                    `value` String,
+                    `index` Boolean
+                )
+            )
+        )
+    ),
     `msg_part_label`                LowCardinality(String)
 ) AS
 WITH
     message_parts AS (
-        SELECT * FROM spacebox.message_event
+        SELECT * FROM spacebox.parsed_event
     ),
     message_parts_with_sub_msg_parts AS (
         WITH
@@ -122,12 +144,12 @@ WITH
                                         [[(
                                             -- tuple.1 label
                                             regex_match_labels[match_groups_index],
-                                            -- tuple.2 msg_events,
-                                            `msg_events`,
+                                            -- tuple.2 msg_events_parsed,
+                                            `msg_events_parsed`,
                                             -- tuple.3 msg_event_start_offset (offset starting from 0)
                                             toUInt64(0),
                                             -- tuple.4 msg_event_end_offset
-                                            length(`msg_events`),
+                                            length(`msg_events_parsed`),
                                             -- tuple.5 next_string_match_after_end_position
                                             toUInt64(0),
                                             -- tuple.6 msg_part_match
@@ -158,13 +180,13 @@ WITH
                                             arrayFold(
                                                 (acc, match, match_label, i) -> (
                                                     arrayConcat(acc, [
-                                                        -- add match result msg_events
+                                                        -- add match result msg_events_parsed
                                                         (
                                                             -- tuple.1 label
                                                             match_label,
-                                                            -- tuple.2 msg_events
+                                                            -- tuple.2 msg_part_events_parsed
                                                             arraySlice(
-                                                                msg_events,
+                                                                `msg_events_parsed`,
                                                                 acc[-1].4 + 1,
                                                                 countSubstrings(match, ',') as msg_events_match_length
                                                             ),
@@ -177,13 +199,13 @@ WITH
                                                             -- tuple.6 msg_part_match
                                                             match
                                                         ),
-                                                        -- add non-match result msg_events
+                                                        -- add non-match result msg_events_parsed
                                                         (
                                                             -- tuple.1 label
                                                             '',
-                                                            -- tuple.2 msg_events
+                                                            -- tuple.2 msg_part_events_parsed
                                                             arraySlice(
-                                                                msg_events,
+                                                                `msg_events_parsed`,
                                                                 cumulative_msg_event_count + 1,
                                                                 countSubstrings(non_match, ',') as msg_events_non_match_length
                                                             ),
@@ -224,9 +246,9 @@ WITH
                                                 [(
                                                     -- tuple.1 label
                                                     '',
-                                                    -- tuple.2 msg_events
+                                                    -- tuple.2 msg_part_events_parsed
                                                     arraySlice(
-                                                        msg_events,
+                                                        `msg_events_parsed`,
                                                         1,
                                                         countSubstrings(first_non_match, ',') as msg_event_count
                                                     ),
@@ -279,8 +301,8 @@ WITH
                             )
                         )
                     ),
-                    -- precompute msg_events "fields" as arrayMap lambda arguments
-                    -- - msg_events "field" msg_events__types
+                    -- precompute msg_events_parsed "fields" as arrayMap lambda arguments
+                    -- - msg_events_parsed "field" msg_events__types
                     arrayFilter(
                         -- filter to only DEX messages by testing for "TickUpdate" or "TrancheUserUpdate" actions
                         -- note: this may change in the future, but if no update has happened, its not really a DEX action
@@ -289,8 +311,8 @@ WITH
                             has(msg_events__types, 'TrancheUserUpdate')
                         ),
                         [arrayMap(
-                            (msg_event) -> JSONExtractString(msg_event, 'type'),
-                            msg_events
+                            (msg_events_parsed) -> msg_events_parsed.1,
+                            `msg_events_parsed`
                         )]
                     )
                 )
@@ -301,7 +323,7 @@ WITH
     ),
     -- define join tuple parts for row fields
     msg_part_tuple.1 as `msg_part_label`,
-    msg_part_tuple.2 as `msg_part_events`,
+    msg_part_tuple.2 as `msg_part_events_parsed`,
     msg_part_tuple.3 as `msg_part_event_start_offset`,
     msg_part_tuple.4 as `msg_part_event_end_offset`,
     msg_part_tuple.5 as `msg_part_next_string_match_after_end_position`,
@@ -321,7 +343,7 @@ SELECT
         toInt16(0)
     ) as `wasm_part_index`,
     `msg_events_index_offset` + `msg_part_event_start_offset` as `msg_part_events_index_offset`,
-    `msg_part_events`,
+    `msg_part_events_parsed`,
     `msg_part_label`
 FROM
     message_parts_with_sub_msg_parts

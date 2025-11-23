@@ -41,9 +41,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_message_event_tranche_user_update_writer source
+-- spacebox.preparsed_dex_message_event_tranche_user_update_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_message_event_tranche_user_update_writer TO spacebox.dex_message_event_tranche_user_update (
+CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_tranche_user_update_writer TO spacebox.dex_message_event_tranche_user_update (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -74,16 +74,16 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tranche_user_update_writer T
         `event_index`,
         `event_type` as `type`,
         -- add event attributes
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'action'), `event_attributes`), 'value') AS `action`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Creator'), `event_attributes`), 'value') AS `Creator`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenOne'), `event_attributes`), 'value') AS `TokenOne`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenIn'), `event_attributes`), 'value') AS `TokenIn`,
-        toInt32(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TickIndex'), `event_attributes`), 'value')) AS `TickIndex`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TrancheKey'), `event_attributes`), 'value') AS `TrancheKey`,
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesOwned'), `event_attributes`), 'value')) AS `SharesOwned`,
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesWithdrawn'), `event_attributes`), 'value')) AS `SharesWithdrawn`
-    FROM spacebox.dex_message_event
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'action'), `event_attributes`), 2) AS `action`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'Creator'), `event_attributes`), 2) AS `Creator`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TokenZero'), `event_attributes`), 2) AS `TokenZero`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TokenOne'), `event_attributes`), 2) AS `TokenOne`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TokenIn'), `event_attributes`), 2) AS `TokenIn`,
+        toInt32(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TickIndex'), `event_attributes`), 2)) AS `TickIndex`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TrancheKey'), `event_attributes`), 2) AS `TrancheKey`,
+        toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'SharesOwned'), `event_attributes`), 2)) AS `SharesOwned`,
+        toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'SharesWithdrawn'), `event_attributes`), 2)) AS `SharesWithdrawn`
+    FROM spacebox.parsed_dex_message_event
     ARRAY JOIN (
         -- Extract "message part" events with event_index
         arrayFlatten(
@@ -93,19 +93,19 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tranche_user_update_writer T
                         -- event_tuple.1: event_index
                         toInt32(`msg_part_events_index_offset` + msg_part_event_index - 1),
                         -- event_tuple.2: event_type
-                        JSONExtractString(tranche_user_update_event, 'type'),
+                        tupleElement(tranche_user_update_event, 1),
                         -- event_tuple.3: event_attributes
-                        JSONExtractArrayRaw(tranche_user_update_event, 'attributes')
+                        tupleElement(tranche_user_update_event, 2)
                     ),
                     -- filter to only TrancheUserUpdate events
                     arrayFilter(
-                        msg_part_event -> JSONExtractString(msg_part_event, 'type') = 'TrancheUserUpdate',
+                        msg_part_event -> tupleElement(msg_part_event, 1) = 'TrancheUserUpdate',
                         [msg_part_event]
                     )
                 ),
                 -- enumerate each (msg_part_event, msg_part_event_index) within a message part
-                `msg_part_events`,
-                arrayEnumerate(`msg_part_events`)
+                `msg_part_events_parsed`,
+                arrayEnumerate(`msg_part_events_parsed`)
             )
         )
     ) AS `event_tuple`

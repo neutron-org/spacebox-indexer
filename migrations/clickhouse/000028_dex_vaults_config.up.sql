@@ -86,6 +86,8 @@ ORDER BY (
     `event_index`
 )
 SETTINGS
+    -- see docs: https://clickhouse.com/docs/operations/settings/merge-tree-settings#deduplicate_merge_projection_mode
+    deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
 

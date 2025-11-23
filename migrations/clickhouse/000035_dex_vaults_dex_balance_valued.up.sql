@@ -50,6 +50,7 @@ ENGINE = ReplacingMergeTree(`price_timestamp`)
 PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
 ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
 SETTINGS
+    deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
 
@@ -155,44 +156,10 @@ WITH
 
 -- spacebox.dex_vaults_dex_balance_valued_again_writer source
 
-CREATE TABLE spacebox.dex_vaults_dex_balance_valued_workaround
-(
-    `timestamp`         DateTime64(9),
-    `height`            Int64,
-    `block_part_index`  Int8,
-    `tx_index`          Int32,
-    `event_index`       Int32,
-    -- add computed sort key for easier event ordering
-    `sort_key`          Tuple(Int64, Int8, Int32, Int32)
-                        MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
-    -- event data
-    `action`            LowCardinality(String),
-    `contract_address`  String,
-    `token_0_balance`   UInt128,
-    `token_1_balance`   UInt128,
-    `token_0_balance_before_deposit`   UInt128,
-    `token_1_balance_before_deposit`   UInt128,
-    `token_0_price`     Float32,
-    `token_1_price`     Float32,
-    -- price information
-    `price_timestamp`   DateTime64(9),
-    `token_0_balance_value` Float64,
-    `token_1_balance_value` Float64,
-    `token_0_balance_before_deposit_value` Float64,
-    `token_1_balance_before_deposit_value` Float64,
-    `token_0_balance_hold_equivalent_amount` Float64,
-    `token_1_balance_hold_equivalent_amount` Float64
-)
--- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
-ENGINE = ReplacingMergeTree(`price_timestamp`)
-PARTITION BY toYYYYMM(`timestamp`) -- allows skipping irrelevant months in timeseries queries
-ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
-SETTINGS
-    index_granularity = 8192;
-
-CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_vaults_dex_balance_valued_again_part_1_writer
+CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_vaults_dex_balance_valued_again_writer
 REFRESH EVERY 5 MINUTE OFFSET 30 SECOND RANDOMIZE FOR 20 SECOND
-TO spacebox.dex_vaults_dex_balance_valued_workaround (
+APPEND
+TO spacebox.dex_vaults_dex_balance_valued (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -238,9 +205,8 @@ WITH
         -- allow overwriting valuation of new shares several times
         -- note: this data can be stale if shares or price data failed to
         --       update for the period of time within this WHERE condition
-        -- WHERE `timestamp` > addHours(NOW(), -1)
-        --     OR `price_timestamp` = 0
-        WHERE `price_timestamp` = 0
+        WHERE `timestamp` > addHours(NOW(), -1)
+            OR `price_timestamp` = 0
     ),
     balances_with_token_config AS (
         SELECT s.*
@@ -299,58 +265,7 @@ WITH
             AND s."timestamp" >= p."timestamp"
         WHERE p_first."timestamp" > 0
     )
-  SELECT * FROM balances_valued
-  SETTINGS allow_experimental_refreshable_materialized_view=true;
-
-CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_vaults_dex_balance_valued_again_part_2_writer
-TO spacebox.dex_vaults_dex_balance_valued (
-    `timestamp`         DateTime64(9),
-    `height`            Int64,
-    `block_part_index`  Int8,
-    `tx_index`          Int32,
-    `event_index`       Int32,
-    -- event data
-    `action`            LowCardinality(String),
-    `contract_address`  String,
-    `token_0_balance`   UInt128,
-    `token_1_balance`   UInt128,
-    `token_0_balance_before_deposit`   UInt128,
-    `token_1_balance_before_deposit`   UInt128,
-    `token_0_price`     Float32,
-    `token_1_price`     Float32,
-    -- price information
-    `price_timestamp` DateTime64(9),
-    `token_0_balance_value` Float64,
-    `token_1_balance_value` Float64,
-    `token_0_balance_before_deposit_value` Float64,
-    `token_1_balance_before_deposit_value` Float64,
-    `token_0_balance_hold_equivalent_amount` Float64,
-    `token_1_balance_hold_equivalent_amount` Float64
-) AS
-SELECT
-    `timestamp`,
-    `height`,
-    `block_part_index`,
-    `tx_index`,
-    `event_index`,
-    -- event data
-    `action`,
-    `contract_address`,
-    `token_0_balance`,
-    `token_1_balance`,
-    `token_0_balance_before_deposit`,
-    `token_1_balance_before_deposit`,
-    `token_0_price`,
-    `token_1_price`,
-    -- price information
-    `price_timestamp`,
-    `token_0_balance_value`,
-    `token_1_balance_value`,
-    `token_0_balance_before_deposit_value`,
-    `token_1_balance_before_deposit_value`,
-    `token_0_balance_hold_equivalent_amount`,
-    `token_1_balance_hold_equivalent_amount`
-FROM spacebox.dex_vaults_dex_balance_valued_workaround;
+  SELECT * FROM balances_valued;
 
 
 -- spacebox.dex_vaults_dex_balance_valued_by_minute_agg table

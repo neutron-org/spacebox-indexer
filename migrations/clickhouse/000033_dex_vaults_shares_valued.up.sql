@@ -55,6 +55,8 @@ CREATE TABLE spacebox.dex_vaults_shares_valued
 ENGINE = ReplacingMergeTree(`timestamp_version`)
 ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
 SETTINGS
+    -- see docs: https://clickhouse.com/docs/operations/settings/merge-tree-settings#deduplicate_merge_projection_mode
+    deduplicate_merge_projection_mode = 'rebuild',
     index_granularity = 8192;
 
 
@@ -171,56 +173,10 @@ WITH
 
 -- spacebox.dex_vaults_shares_valued_again_writer source
 
-CREATE TABLE spacebox.dex_vaults_shares_valued_workaround
-(
-    `timestamp`         DateTime64(9),
-    `height`            Int64,
-    `block_part_index`  Int8,
-    `tx_index`          Int32,
-    `event_index`       Int32,
-    -- add computed sort key for easier event ordering
-    `sort_key`          Tuple(Int64, Int8, Int32, Int32)
-                        MATERIALIZED tuple(`height`, `block_part_index`, `tx_index`, `event_index`),
-    -- event data
-    `creator`           String,
-    `action`            LowCardinality(String),
-    `contract_address`  String,
-    -- save boolean for credit/debit
-    `credit`            Boolean MATERIALIZED `action` = 'deposit',
-    `token_0_deposited` UInt128, -- amount deposited
-    `token_1_deposited` UInt128, -- amount deposited
-    `token_0_withdrawn` UInt128, -- amount withdrawn
-    `token_1_withdrawn` UInt128, -- amount withdrawn
-    `shares_in`         UInt128, -- shares added
-    `shares_out`        UInt128, -- shares removed
-    `total_shares`      UInt128, -- total shares
-    -- price information
-    `price_timestamp`   DateTime64(9),
-    `price_0`           Float64,
-    `price_1`           Float64,
-    `value_deposited`   Float64,
-    `value_withdrawn`   Float64,
-    `hold_equivalent_0` Float64,
-    `hold_equivalent_1` Float64,
-    `balance_timestamp` DateTime64(9),
-    `token_0_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
-    `token_1_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
-    `value_open`        Float64, -- value held in vault (before deposit/withdrawal)
-    `value_close`       Float64, -- value held in vault (~after deposit/withdrawal)
-    -- determine most recent version by the recentness of the price data
-    `timestamp_version`     UInt64 MATERIALIZED
-                            toUnixTimestamp64Milli(`price_timestamp`) +
-                            toUnixTimestamp64Milli(`balance_timestamp`)
-)
--- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
-ENGINE = ReplacingMergeTree(`timestamp_version`)
-ORDER BY (`height`, `block_part_index`, `tx_index`, `event_index`)
-SETTINGS index_granularity = 8192;
-
--- create a workaround table to implement an APPEND only mode (added in version 24.9)
-CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_valued_again_part_1_writer
+CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_valued_again_writer
 REFRESH EVERY 5 MINUTE OFFSET 10 SECOND
-TO spacebox.dex_vaults_shares_valued_workaround (
+APPEND
+TO spacebox.dex_vaults_shares_valued (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -274,9 +230,8 @@ WITH
         -- allow overwriting valuation of new shares several times
         -- note: this data can be stale if shares or price data failed to
         --       update for the period of time within this WHERE condition
-        -- WHERE `timestamp` > addHours(NOW(), -1)
-        --     OR `balance_timestamp` = 0
-        WHERE `balance_timestamp` = 0
+        WHERE `timestamp` > addHours(NOW(), -1)
+            OR `balance_timestamp` = 0
             OR `price_timestamp` = 0
     ),
     shares_with_token_config as (
@@ -342,70 +297,5 @@ WITH
         WHERE p_first."timestamp" > 0
     )
     SELECT *
-    FROM shares_valued
-    SETTINGS allow_experimental_refreshable_materialized_view=true;
+    FROM shares_valued;
 
--- write from temp table back to original table
-CREATE MATERIALIZED VIEW spacebox.dex_vaults_shares_valued_again_part_2_writer
-TO spacebox.dex_vaults_shares_valued (
-    `timestamp`         DateTime64(9),
-    `height`            Int64,
-    `block_part_index`  Int8,
-    `tx_index`          Int32,
-    `event_index`       Int32,
-    -- event data
-    `creator`           String,
-    `action`            LowCardinality(String),
-    `contract_address`  String,
-    `token_0_deposited` UInt128, -- amount deposited
-    `token_1_deposited` UInt128, -- amount deposited
-    `token_0_withdrawn` UInt128, -- amount withdrawn
-    `token_1_withdrawn` UInt128, -- amount withdrawn
-    `shares_in`         UInt128, -- shares added
-    `shares_out`        UInt128, -- shares removed
-    `total_shares`      UInt128, -- total shares
-    -- price information
-    `price_timestamp`   DateTime64(9),
-    `price_0`           Float64,
-    `price_1`           Float64,
-    `value_deposited`   Float64,
-    `value_withdrawn`   Float64,
-    `hold_equivalent_0` Float64,
-    `hold_equivalent_1` Float64,
-    `balance_timestamp` DateTime64(9),
-    `token_0_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
-    `token_1_balance`   UInt128, -- amount held in vault (before deposit/withdrawal)
-    `value_open`        Float64, -- value held in vault (before deposit/withdrawal)
-    `value_close`       Float64  -- value held in vault (~after deposit/withdrawal)
-) AS
-SELECT
-    `timestamp`,
-    `height`,
-    `block_part_index`,
-    `tx_index`,
-    `event_index`,
-    -- event data
-    `creator`,
-    `action`,
-    `contract_address`,
-    `token_0_deposited`,
-    `token_1_deposited`,
-    `token_0_withdrawn`,
-    `token_1_withdrawn`,
-    `shares_in`,
-    `shares_out`,
-    `total_shares`,
-    -- price information
-    `price_timestamp`,
-    `price_0`,
-    `price_1`,
-    `value_deposited`,
-    `value_withdrawn`,
-    `hold_equivalent_0`,
-    `hold_equivalent_1`,
-    `balance_timestamp`,
-    `token_0_balance`,
-    `token_1_balance`,
-    `value_open`,
-    `value_close`
-FROM spacebox.dex_vaults_shares_valued_workaround;

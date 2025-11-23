@@ -77,7 +77,8 @@ CREATE TABLE spacebox.raw_block_results_topic
         SETTINGS kafka_broker_list = 'kafka:9093',
             kafka_topic_list = 'raw_block_results',
             kafka_group_name = 'spacebox',
-            kafka_format = 'JSONAsString';
+            kafka_format = 'JSONAsString',
+            kafka_max_block_size = 100;
 
 
 -- spacebox.raw_block_results definition

@@ -77,7 +77,7 @@ WITH
                         -- MsgWithdrawal
                         '(?:execute,)?(?:wasm,)?(?:message,)?(?:(?:neutron,)?TickUpdate,)+(?:message,)*coin_spent,coin_received,transfer,(?:message,)?coin_spent,burn(?:,coin_spent,coin_received,transfer(?:,message)?,neutron)+,',
                         -- MsgPlaceLimitOrder
-                        '(?:execute,)?(?:wasm,)?(?:message,)?(?:(?:neutron,)?TickUpdate(?:,TickUpdate)?,)*neutron,(?:neutron,)?(?:TickUpdate,)?TrancheUserUpdate,(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?,',
+                        '(?:execute,)?(?:wasm,)?(?:message,)?(?:(?:neutron,)?TickUpdate,(?:TickUpdate,)?)+(?:neutron,)?(?:neutron,)?(?:TickUpdate,)?(?:TrancheUserUpdate,)?(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer,(?:message,)?',
                         -- MsgCancelLimitOrder
                         '(?:execute,)?(?:wasm,)?(?:message,)?(?:TrancheUserUpdate,(?:neutron,)?TickUpdate,)+(?:coin_spent,coin_received,transfer,(?:message,)?)?coin_spent,coin_received,transfer(?:,message)?(?:,message)?,',
                         -- MsgMultiHopSwap

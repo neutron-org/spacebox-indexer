@@ -1,3 +1,4 @@
+<?xml version="1.0"?>
 <clickhouse>
     <!-- Listen wildcard address to allow accepting connections from other containers and host network. -->
     <listen_host>::</listen_host>

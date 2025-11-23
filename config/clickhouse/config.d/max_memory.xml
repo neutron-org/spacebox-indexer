@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <!-- Total server memory limit as a ratio -->
+    <max_server_memory_usage>0</max_server_memory_usage>
+    <max_server_memory_usage_to_ram_ratio>0.6</max_server_memory_usage_to_ram_ratio>
+
+    <!-- Concurrency and thread control -->
+    <max_concurrent_queries>25</max_concurrent_queries>
+    <background_pool_size>24</background_pool_size>
+    <background_schedule_pool_size>24</background_schedule_pool_size>
+
+    <!-- Merge operations control -->
+    <max_bytes_to_merge_at_max_space_in_pool>3000000000</max_bytes_to_merge_at_max_space_in_pool>
+
+    <!-- Cache settings -->
+    <mark_cache_size>8589934592</mark_cache_size>              <!-- 8GB -->
+    <uncompressed_cache_size>12884901888</uncompressed_cache_size> <!-- 12GB -->
+</clickhouse>

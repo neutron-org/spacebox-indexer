@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <kafka>
+        <!-- Hard upper bound on rows per flush -->
+        <batch_num_messages>10000</batch_num_messages>
+
+        <!-- extend poll max interval time -->
+        <max_poll_interval_ms>600000</max_poll_interval_ms>
+    </kafka>
+</clickhouse>

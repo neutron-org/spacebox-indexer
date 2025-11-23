@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <profiles>
+        <default>
+            <!-- Per-query limits -->
+            <max_memory_usage>30000000000</max_memory_usage>
+            <max_memory_usage_for_user>45000000000</max_memory_usage_for_user>
+        </default>
+    </profiles>
+</clickhouse>

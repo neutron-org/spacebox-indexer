@@ -128,6 +128,54 @@ See refreshable materialized views
     SYSTEM START VIEW spacebox.dex_vaults_dex_balance_valued_daily_writer;
 ```
 
+#### Debugging quereies
+
+##### Reattaching broken Kafka tables
+
+if a Kafka service appears to be stopped (a table appears to not be connected as a consumer)
+
+```shell
+# if there appears to be no consumer ID for a Kafka table in these queries
+sudo docker exec -it $(sudo docker ps -q --filter name=spacebox-kafka-1 ) /opt/bitnami/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group spacebox --offsets
+sudo docker exec -it $(sudo docker ps -q --filter name=spacebox-clickhouse-1 ) clickhouse-client --query "SELECT * FROM system.tables WHERE engine = 'Kafka'"
+```
+
+Then you may have to re-attach the Kafka table to start it consuming again
+see: https://clickhouse.com/docs/integrations/kafka/kafka-table-engine#common-operations
+
+```sql
+DETACH TABLE spacebox.raw_block_results_topic;
+ATTACH TABLE spacebox.raw_block_results_topic;
+```
+
+##### How to recover from an app hash issue
+
+```sql
+-- for removing an example bad AppHash data of block 37545431
+ALTER TABLE spacebox.bank_transfer DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.bank_transfer_by_address_then_denom DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_message_event_action DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_message_event_deposit_lp DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_message_event_tick_state DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_message_event_tick_update DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_message_event_tranche_user_update DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_message_event_withdraw_lp DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_swaps DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_swaps_valued DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_vaults_config_event DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_vaults_dex_balance DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_vaults_dex_balance_valued DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_vaults_dex_balance_valued_by_minute_agg DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_vaults_events_dex_deposit DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_vaults_shares DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.dex_vaults_shares_valued DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.parsed_event DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.parsed_dex_message_event DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.price_by_vault_denom DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.price_by_vault_denom_by_minute_agg DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.raw_block_results DELETE WHERE height = 37545431;
+```
+
 A remote Clickhouse server query
 
 ```sql

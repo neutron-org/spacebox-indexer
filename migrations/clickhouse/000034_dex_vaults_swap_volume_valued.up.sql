@@ -248,3 +248,120 @@ WITH
           AND v."token_1_quote_currency" = 'USD'
     )
   SELECT * FROM swaps_valued;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_swaps_valued_daily_writer
+REFRESH EVERY 1 DAY RANDOMIZE FOR 1 HOUR
+APPEND
+TO spacebox.dex_swaps_valued (
+    `timestamp`         DateTime64(9),
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    -- event data
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `Receiver`          Nullable(String),
+    `TokenZero`         LowCardinality(String),
+    `TokenOne`          LowCardinality(String),
+    `TickIndex`         Int64,
+    `Fee`               UInt64,
+    `TrancheKey`        Nullable(String),
+    `ReservesInZero`    UInt256,
+    `ReservesInOne`     UInt256,
+    `ReservesOutZero`   UInt256,
+    `ReservesOutOne`    UInt256,
+    -- price information
+    `price_timestamp`   DateTime64(9),
+    `value_in_0`        Float64,
+    `value_in_1`        Float64,
+    `value_fee_0`       Float64,
+    `value_fee_1`       Float64,
+    `value_out_0`       Float64, -- should be equal to ~(value_in_1 - value_fee_1)
+    `value_out_1`       Float64, -- should be equal to ~(value_in_0 - value_fee_0)
+) AS
+WITH
+    source as (
+        -- get recently valued rows of unsure price times
+        SELECT
+          `timestamp`,
+          `height`,
+          `block_part_index`,
+          `tx_index`,
+          `event_index`,
+          -- event data
+          `type`,
+          `action`,
+          `Receiver`,
+          `TokenZero`,
+          `TokenOne`,
+          `TickIndex`,
+          `Fee`,
+          `TrancheKey`,
+          `ReservesInZero`,
+          `ReservesInOne`,
+          `ReservesOutZero`,
+          `ReservesOutOne`
+        FROM spacebox.dex_swaps_valued
+        -- allow overwriting valuation of new shares several times
+        -- note: this data can be stale if shares or price data failed to
+        --       update for the period of time within this WHERE condition
+        WHERE addMinutes(`price_timestamp`, 1) < `timestamp`
+    ),
+    swaps_valued AS (
+        WITH
+            p."token_0_price" as "token_price_0",
+            p."token_1_price" as "token_price_1",
+            if(s."ReservesOutZero" < s."ReservesInZero", s."ReservesInZero" - s."ReservesOutZero", 0) as "amount_in_0",
+            if(s."ReservesOutOne" < s."ReservesInOne", s."ReservesInOne" - s."ReservesOutOne", 0) as "amount_in_1",
+            if(s."ReservesOutZero" > s."ReservesInZero", s."ReservesOutZero" - s."ReservesInZero", 0) as "amount_out_0",
+            if(s."ReservesOutOne" > s."ReservesInOne", s."ReservesOutOne" - s."ReservesInOne", 0) as "amount_out_1",
+            "token_price_0" * toFloat64("amount_in_0") as "value_in_0",
+            "token_price_1" * toFloat64("amount_in_1") as "value_in_1",
+            "value_in_0" * toFloat64(power(1.0001, s."Fee") - 1) as "value_fee_0",
+            "value_in_1" * toFloat64(power(1.0001, s."Fee") - 1) as "value_fee_1",
+            "token_price_0" * toFloat64("amount_out_0") as "value_out_0",
+            "token_price_1" * toFloat64("amount_out_1") as "value_out_1"
+        SELECT
+            s."timestamp" as "timestamp",
+            s."height" as "height",
+            s."block_part_index" as "block_part_index",
+            s."tx_index" as "tx_index",
+            s."event_index" as "event_index",
+            -- event data
+            s."type" as "type",
+            s."action" as "action",
+            s."Receiver" as "Receiver",
+            s."TokenZero" as "TokenZero",
+            s."TokenOne" as "TokenOne",
+            s."TickIndex" as "TickIndex",
+            s."Fee" as "Fee",
+            s."TrancheKey" as "TrancheKey",
+            s."ReservesInZero" as "ReservesInZero",
+            s."ReservesInOne" as "ReservesInOne",
+            s."ReservesOutZero" as "ReservesOutZero",
+            s."ReservesOutOne" as "ReservesOutOne",
+            -- price information
+            -- prevent `price_timestamp` = 0 rows from being re-processed forever
+            -- by setting price=0 with p_first timestamps for times that are too early
+            if(s."timestamp" >= p_first."timestamp", p."timestamp", p_first."timestamp") as "price_timestamp",
+            "value_in_0",
+            "value_in_1",
+            "value_fee_0",
+            "value_fee_1",
+            "value_out_0",
+            "value_out_1"
+        FROM source as s
+        ANY LEFT JOIN spacebox.dex_vaults_by_pair_config_state as v
+            ON (s."TokenZero" = v."token_0_denom")
+            AND (s."TokenOne" = v."token_1_denom")
+        ANY LEFT JOIN spacebox.price_by_vault_denom_first_state as p_first
+            ON (v."contract_address" = p_first."contract_address")
+        ASOF LEFT JOIN spacebox.price_by_vault_denom as p
+            ON (v."contract_address" = p."contract_address")
+            AND s."timestamp" >= p."timestamp"
+        WHERE p_first."timestamp" > 0
+          AND v."token_0_quote_currency" = 'USD'
+          AND v."token_1_quote_currency" = 'USD'
+    )
+  SELECT * FROM swaps_valued;

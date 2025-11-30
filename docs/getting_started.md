@@ -94,6 +94,19 @@ Get size of tables
     ORDER BY database ASC, total_bytes DESC;
 ```
 
+Trimming irrelevant data to save space
+
+```sql
+-- parsed_event is an intermediary table it does not need to always persist data
+ALTER TABLE spacebox.parsed_event MODIFY TTL timestamp + toIntervalDay(30)
+```
+
+See Kafka tabls
+
+```sql
+SELECT * FROM system.tables WHERE engine = 'Kafka';
+```
+
 See materialized views
 
 ```sql
@@ -103,6 +116,16 @@ See materialized views
     FROM system.tables
     WHERE engine = 'MaterializedView'
     ORDER BY database, view ASC;
+```
+
+See refreshable materialized views
+
+```sql
+    SELECT * FROM system.view_refreshes;
+    -- RUN one of these views immediately
+    SYSTEM START VIEW spacebox.dex_swaps_valued_daily_writer;
+    SYSTEM START VIEW spacebox.dex_vaults_shares_valued_daily_writer;
+    SYSTEM START VIEW spacebox.dex_vaults_dex_balance_valued_daily_writer;
 ```
 
 A remote Clickhouse server query

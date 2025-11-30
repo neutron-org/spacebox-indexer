@@ -29,15 +29,15 @@ CREATE TABLE spacebox.dex_message_event_tick_update
     -- added to calculate SwapAmountIn/Out for DEX v<=5 events
     `is_swap`           Boolean,
     `is_estimated_swap` Boolean,
-    `version`           UInt8 DEFAULT 1,
+    `inserted_at`       DateTime MATERIALIZED nowInBlock(),
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for token pair specific queries
-    INDEX `pair_index` (`TokenZero`, `TokenOne`, `TokenIn`) TYPE set(0),
-    -- add index for tranche queries
-    INDEX `tranche_key_index` (`TrancheKey`) TYPE bloom_filter(0.01))
+    INDEX `pair_index` (`TokenZero`, `TokenOne`, `TokenIn`) TYPE set(0)
+)
 -- use ReplacingMergeTree ensure (eventually) no duplicates of the ORDER BY columns
-ENGINE = ReplacingMergeTree(`version`)
+ENGINE = ReplacingMergeTree(`inserted_at`)
+PARTITION BY toYYYYMM(`timestamp`) -- allow skipping irrelevant months
 ORDER BY (
     -- the minimum unique parts needed to describe a unique TickUpdate position
     `height`,
@@ -294,13 +294,15 @@ CREATE TABLE spacebox.dex_message_event_tick_state
     `Reserves`          UInt256,
     -- add field to hint to Clickhouse that field is "deleted" (will not actually be deleted)
     `ReservesZero`      Boolean MATERIALIZED `Reserves` = 0,
+    `inserted_at`       DateTime,
     -- create version number by combining all indexes together into a large (256 bit) space
     `version`           UInt256 MATERIALIZED
         -- add in order from lowest to highest ordering effect
-        (`event_index`        * toUInt256(1))
-        + (`tx_index`         * toUInt256(4294967296))              -- + shift by 32 event_index bits (2^32)
-        + (`block_part_index` * toUInt256(18446744073709551616))    -- + shift by 32 tx_index bits (2^64)
-        + (`height`           * toUInt256(4722366482869645213696))  -- + shift by 8 part_index bits (2^72)
+        (toUnixTimestamp(`inserted_at`) * toUInt256(pow(2, 0))) +               -- start with no offset
+        (`event_index`                  * toUInt256(pow(2, 4))) +               -- + shift by 4 DateTime bits
+        (`tx_index`                     * toUInt256(pow(2, 4 + 32))) +          -- + shift by 32 event_index bits
+        (`block_part_index`             * toUInt256(pow(2, 4 + 32 + 32))) +     -- + shift by 32 tx_index bits
+        (`height`                       * toUInt256(pow(2, 4 + 32 + 32 + 8)))   -- + shift by 8 part_index bits
 )
 -- use ReplacingMergeTree to ensure (eventually) no duplicates of the ORDER BY fields + `version`
 ENGINE = ReplacingMergeTree(`version`, `ReservesZero`)
@@ -331,7 +333,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_tick_state_writer TO spacebo
     `TickIndex`         Int64,
     `Fee`               UInt64,
     `TrancheKey`        String,
-    `Reserves`          UInt256
+    `Reserves`          UInt256,
+    `inserted_at`       DateTime
 ) AS
 SELECT
     `timestamp`,
@@ -345,5 +348,6 @@ SELECT
     `TickIndex`,
     `Fee`,
     `TrancheKey`,
-    `Reserves`
+    `Reserves`,
+    `inserted_at`
 FROM spacebox.dex_message_event_tick_update;

@@ -98,10 +98,15 @@ Trimming irrelevant data to save space
 
 ```sql
 -- parsed_event is an intermediary table it does not need to always persist data
-ALTER TABLE spacebox.parsed_event MODIFY TTL timestamp + toIntervalDay(30)
+ALTER TABLE spacebox.parsed_event MODIFY TTL timestamp + toIntervalDay(30);
+-- some system tables contain just logs and can get very large
+ALTER TABLE system.text_log MODIFY TTL event_time + toIntervalDay(7);
+ALTER TABLE system.query_views_log MODIFY TTL event_time + toIntervalDay(7);
+-- to apply a TTL immediately
+ALTER TABLE system.text_log MATERIALIZE TTL;
 ```
 
-See Kafka tabls
+See Kafka tables
 
 ```sql
 SELECT * FROM system.tables WHERE engine = 'Kafka';

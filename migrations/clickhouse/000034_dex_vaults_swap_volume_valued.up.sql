@@ -117,7 +117,7 @@ WITH
             "value_fee_1",
             "value_out_0",
             "value_out_1"
-        FROM spacebox.dex_swaps as s
+        FROM source as s
         ANY LEFT JOIN spacebox.dex_vaults_by_pair_config_state as v
             ON (s."TokenZero" = v."token_0_denom")
             AND (s."TokenOne" = v."token_1_denom")

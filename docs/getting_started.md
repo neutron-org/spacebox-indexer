@@ -128,9 +128,9 @@ See refreshable materialized views
 ```sql
     SELECT * FROM system.view_refreshes;
     -- RUN one of these views immediately
-    SYSTEM START VIEW spacebox.dex_swaps_valued_daily_writer;
-    SYSTEM START VIEW spacebox.dex_vaults_shares_valued_daily_writer;
-    SYSTEM START VIEW spacebox.dex_vaults_dex_balance_valued_daily_writer;
+    SYSTEM REFRESH VIEW spacebox.dex_swaps_valued_daily_writer;
+    SYSTEM REFRESH VIEW spacebox.dex_vaults_shares_valued_daily_writer;
+    SYSTEM REFRESH VIEW spacebox.dex_vaults_dex_balance_valued_daily_writer;
 ```
 
 #### Debugging quereies

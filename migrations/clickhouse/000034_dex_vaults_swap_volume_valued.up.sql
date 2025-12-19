@@ -116,17 +116,54 @@ WITH
             "value_fee_0",
             "value_fee_1",
             "value_out_0",
-            "value_out_1"
+            "value_out_1",
+            p."timestamp" as "sort_key",
+            p."contract_address" as "contract_address"
         FROM source as s
-        ANY LEFT JOIN spacebox.dex_vaults_by_pair_config_state as v
+        -- join to multiple configured vaults
+        LEFT JOIN spacebox.dex_vaults_config_state as v
             ON (s."TokenZero" = v."token_0_denom")
             AND (s."TokenOne" = v."token_1_denom")
-        ANY LEFT JOIN spacebox.price_by_vault_denom_state as p
+        -- join to prices of multiple configured vaults
+        LEFT JOIN spacebox.price_by_vault_denom_state as p
             ON (v."contract_address" = p."contract_address")
         WHERE v."token_0_quote_currency" = 'USD'
           AND v."token_1_quote_currency" = 'USD'
     )
-  SELECT * FROM swaps_valued;
+  -- select rows with the freshest price data of all vault price data
+  SELECT
+    argMax("timestamp", "sort_key") as "timestamp",
+    "height",
+    "block_part_index",
+    "tx_index",
+    "event_index",
+    -- event data
+    argMax("type", "sort_key") as "type",
+    argMax("action", "sort_key") as "action",
+    argMax("Receiver", "sort_key") as "Receiver",
+    argMax("TokenZero", "sort_key") as "TokenZero",
+    argMax("TokenOne", "sort_key") as "TokenOne",
+    argMax("TickIndex", "sort_key") as "TickIndex",
+    argMax("Fee", "sort_key") as "Fee",
+    argMax("TrancheKey", "sort_key") as "TrancheKey",
+    argMax("ReservesInZero", "sort_key") as "ReservesInZero",
+    argMax("ReservesInOne", "sort_key") as "ReservesInOne",
+    argMax("ReservesOutZero", "sort_key") as "ReservesOutZero",
+    argMax("ReservesOutOne", "sort_key") as "ReservesOutOne",
+    -- price information
+    argMax("price_timestamp", "sort_key") as "price_timestamp",
+    argMax("value_in_0", "sort_key") as "value_in_0",
+    argMax("value_in_1", "sort_key") as "value_in_1",
+    argMax("value_fee_0", "sort_key") as "value_fee_0",
+    argMax("value_fee_1", "sort_key") as "value_fee_1",
+    argMax("value_out_0", "sort_key") as "value_out_0",
+    argMax("value_out_1", "sort_key") as "value_out_1"
+  FROM swaps_valued
+  GROUP BY
+    "height",
+    "block_part_index",
+    "tx_index",
+    "event_index";
 
 
 -- spacebox.dex_swaps_valued_again_writer source
@@ -233,9 +270,10 @@ WITH
             "value_fee_0",
             "value_fee_1",
             "value_out_0",
-            "value_out_1"
+            "value_out_1",
+            "price_timestamp" as "sort_key"
         FROM source as s
-        ANY LEFT JOIN spacebox.dex_vaults_by_pair_config_state as v
+        LEFT JOIN spacebox.dex_vaults_config_state as v
             ON (s."TokenZero" = v."token_0_denom")
             AND (s."TokenOne" = v."token_1_denom")
         ANY LEFT JOIN spacebox.price_by_vault_denom_first_state as p_first
@@ -247,7 +285,41 @@ WITH
           AND v."token_0_quote_currency" = 'USD'
           AND v."token_1_quote_currency" = 'USD'
     )
-  SELECT * FROM swaps_valued;
+  -- select rows with the freshest price data of all vault price data
+  SELECT
+    argMax("timestamp", "sort_key") as "timestamp",
+    "height",
+    "block_part_index",
+    "tx_index",
+    "event_index",
+    -- event data
+    argMax("type", "sort_key") as "type",
+    argMax("action", "sort_key") as "action",
+    argMax("Receiver", "sort_key") as "Receiver",
+    argMax("TokenZero", "sort_key") as "TokenZero",
+    argMax("TokenOne", "sort_key") as "TokenOne",
+    argMax("TickIndex", "sort_key") as "TickIndex",
+    argMax("Fee", "sort_key") as "Fee",
+    argMax("TrancheKey", "sort_key") as "TrancheKey",
+    argMax("ReservesInZero", "sort_key") as "ReservesInZero",
+    argMax("ReservesInOne", "sort_key") as "ReservesInOne",
+    argMax("ReservesOutZero", "sort_key") as "ReservesOutZero",
+    argMax("ReservesOutOne", "sort_key") as "ReservesOutOne",
+    -- price information
+    argMax("price_timestamp", "sort_key") as "price_timestamp",
+    argMax("value_in_0", "sort_key") as "value_in_0",
+    argMax("value_in_1", "sort_key") as "value_in_1",
+    argMax("value_fee_0", "sort_key") as "value_fee_0",
+    argMax("value_fee_1", "sort_key") as "value_fee_1",
+    argMax("value_out_0", "sort_key") as "value_out_0",
+    argMax("value_out_1", "sort_key") as "value_out_1"
+  FROM swaps_valued
+  GROUP BY
+    "height",
+    "block_part_index",
+    "tx_index",
+    "event_index";
+
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_swaps_valued_daily_writer
 REFRESH EVERY 1 DAY RANDOMIZE FOR 1 HOUR
@@ -350,9 +422,10 @@ WITH
             "value_fee_0",
             "value_fee_1",
             "value_out_0",
-            "value_out_1"
+            "value_out_1",
+            "price_timestamp" as "sort_key"
         FROM source as s
-        ANY LEFT JOIN spacebox.dex_vaults_by_pair_config_state as v
+        LEFT JOIN spacebox.dex_vaults_config_state as v
             ON (s."TokenZero" = v."token_0_denom")
             AND (s."TokenOne" = v."token_1_denom")
         ANY LEFT JOIN spacebox.price_by_vault_denom_first_state as p_first
@@ -364,4 +437,38 @@ WITH
           AND v."token_0_quote_currency" = 'USD'
           AND v."token_1_quote_currency" = 'USD'
     )
-  SELECT * FROM swaps_valued;
+  -- select rows with the freshest price data of all vault price data
+  SELECT
+    argMax("timestamp", "sort_key") as "timestamp",
+    "height",
+    "block_part_index",
+    "tx_index",
+    "event_index",
+    -- event data
+    argMax("type", "sort_key") as "type",
+    argMax("action", "sort_key") as "action",
+    argMax("Receiver", "sort_key") as "Receiver",
+    argMax("TokenZero", "sort_key") as "TokenZero",
+    argMax("TokenOne", "sort_key") as "TokenOne",
+    argMax("TickIndex", "sort_key") as "TickIndex",
+    argMax("Fee", "sort_key") as "Fee",
+    argMax("TrancheKey", "sort_key") as "TrancheKey",
+    argMax("ReservesInZero", "sort_key") as "ReservesInZero",
+    argMax("ReservesInOne", "sort_key") as "ReservesInOne",
+    argMax("ReservesOutZero", "sort_key") as "ReservesOutZero",
+    argMax("ReservesOutOne", "sort_key") as "ReservesOutOne",
+    -- price information
+    argMax("price_timestamp", "sort_key") as "price_timestamp",
+    argMax("value_in_0", "sort_key") as "value_in_0",
+    argMax("value_in_1", "sort_key") as "value_in_1",
+    argMax("value_fee_0", "sort_key") as "value_fee_0",
+    argMax("value_fee_1", "sort_key") as "value_fee_1",
+    argMax("value_out_0", "sort_key") as "value_out_0",
+    argMax("value_out_1", "sort_key") as "value_out_1"
+  FROM swaps_valued
+  GROUP BY
+    "height",
+    "block_part_index",
+    "tx_index",
+    "event_index";
+

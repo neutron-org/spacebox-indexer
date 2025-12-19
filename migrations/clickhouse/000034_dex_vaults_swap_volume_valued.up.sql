@@ -72,7 +72,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS spacebox.dex_swaps_valued_writer TO space
     `value_fee_0`       Float64,
     `value_fee_1`       Float64,
     `value_out_0`       Float64, -- should be equal to ~(value_in_1 - value_fee_1)
-    `value_out_1`       Float64, -- should be equal to ~(value_in_0 - value_fee_0)
+    `value_out_1`       Float64  -- should be equal to ~(value_in_0 - value_fee_0)
 ) AS
 WITH
     source AS (SELECT * FROM spacebox.dex_swaps),

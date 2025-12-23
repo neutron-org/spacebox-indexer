@@ -1,7 +1,7 @@
 
--- spacebox.dex_message_event_action table
+-- spacebox.parsed_dex_message_event_action table
 
-CREATE TABLE spacebox.dex_message_event_action
+CREATE TABLE spacebox.parsed_dex_message_event_action
 (
     `timestamp`         DateTime64(9),
     `height`            Int64,
@@ -14,7 +14,7 @@ CREATE TABLE spacebox.dex_message_event_action
     -- event data
     `type`              LowCardinality(String),
     `action`            LowCardinality(String),
-    `attributes`        String,
+    `attributes_parsed` Array(Tuple(key String, value String, index Bool)),
     -- add index for timeseries queries
     INDEX `timestamp_index` (`timestamp`) TYPE minmax,
     -- add index for action type queries
@@ -31,9 +31,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.preparsed_dex_message_event_action_writer source
+-- spacebox.dex_message_parsed_event_action_writer source
 
-CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_action_writer TO spacebox.dex_message_event_action (
+CREATE MATERIALIZED VIEW spacebox.dex_message_parsed_event_action_writer TO spacebox.parsed_dex_message_event_action (
     `timestamp`         DateTime64(9),
     `height`            Int64,
     `block_part_index`  Int8,
@@ -42,7 +42,7 @@ CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_action_writer TO s
     -- event data
     `type`              LowCardinality(String),
     `action`            LowCardinality(String),
-    `attributes`        String
+    `attributes_parsed` Array(Tuple(key String, value String, index Bool))
 ) AS
     WITH
         -- define event_tuple parts for row fields
@@ -58,12 +58,7 @@ CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_action_writer TO s
         `event_type` as `type`,
         -- add event attributes
         tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'action'), `event_attributes`), 2) AS `action`,
-        toJSONString(
-            arrayMap(
-                (attr) -> map('key', (attr).1, 'value', (attr).2, 'index', toString((attr).3)),
-                `event_attributes`
-            )
-        ) as `attributes`
+        `event_attributes` as `attributes_parsed`
     FROM spacebox.parsed_dex_message_event
     ARRAY JOIN (
         -- Extract "message part" events with event_index

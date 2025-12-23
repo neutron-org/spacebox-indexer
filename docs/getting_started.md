@@ -159,7 +159,6 @@ ATTACH TABLE spacebox.raw_block_results_topic;
 -- for removing an example bad AppHash data of block 37545431
 ALTER TABLE spacebox.bank_transfer DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.bank_transfer_by_address_then_denom DELETE WHERE height = 37545431;
-ALTER TABLE spacebox.dex_message_event_action DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.dex_message_event_deposit_lp DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.dex_message_event_tick_state DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.dex_message_event_tick_update DELETE WHERE height = 37545431;
@@ -176,6 +175,7 @@ ALTER TABLE spacebox.dex_vaults_shares DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.dex_vaults_shares_valued DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.parsed_event DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.parsed_dex_message_event DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.parsed_dex_message_event_action DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.price_by_vault_denom DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.price_by_vault_denom_by_minute_agg DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.raw_block_results DELETE WHERE height = 37545431;

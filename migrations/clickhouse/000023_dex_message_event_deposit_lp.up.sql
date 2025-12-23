@@ -48,9 +48,9 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
--- spacebox.dex_message_event_deposit_lp_writer source
+-- spacebox.preparsed_dex_message_event_deposit_lp_writer source
 
-CREATE MATERIALIZED VIEW spacebox.dex_message_event_deposit_lp_writer TO spacebox.dex_message_event_deposit_lp (
+CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_deposit_lp_writer TO spacebox.dex_message_event_deposit_lp (
     `timestamp`             DateTime64(9),
     `height`                Int64,
     `block_part_index`      Int8,
@@ -79,8 +79,8 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_deposit_lp_writer TO spacebo
         JSONExtractArrayRaw(`attributes`) as `event_attributes`,
         -- get possibly defined (since Neutron v6.0) attributes
         -- since (Neutron v8.0) these are now be Decimal strings that require regex extraction to get the correct integer
-        extract(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'AmountInTokenZero'), `event_attributes`), 'value'), '^[0-9]+') AS `AmountInTokenZeroString`,
-        extract(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'AmountInTokenOne'), `event_attributes`), 'value'), '^[0-9]+') AS `AmountInTokenOneString`
+        extract(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'AmountInTokenZero'), `event_attributes`), 2), '^[0-9]+') AS `AmountInTokenZeroString`,
+        extract(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'AmountInTokenOne'), `event_attributes`), 2), '^[0-9]+') AS `AmountInTokenOneString`
     SELECT
         `timestamp`,
         `height`,
@@ -90,22 +90,22 @@ CREATE MATERIALIZED VIEW spacebox.dex_message_event_deposit_lp_writer TO spacebo
         `type`,
         `action`,
         -- add DEX event attributes
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Creator'), `event_attributes`), 'value') AS `Creator`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Receiver'), `event_attributes`), 'value') AS `Receiver`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenZero'), `event_attributes`), 'value') AS `TokenZero`,
-        JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TokenOne'), `event_attributes`), 'value') AS `TokenOne`,
-        toInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'TickIndex'), `event_attributes`), 'value')) AS `TickIndex`,
-        toUInt64(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'Fee'), `event_attributes`), 'value')) AS `Fee`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'Creator'), `event_attributes`), 2) AS `Creator`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'Receiver'), `event_attributes`), 2) AS `Receiver`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TokenZero'), `event_attributes`), 2) AS `TokenZero`,
+        tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TokenOne'), `event_attributes`), 2) AS `TokenOne`,
+        toInt64(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'TickIndex'), `event_attributes`), 2)) AS `TickIndex`,
+        toUInt64(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'Fee'), `event_attributes`), 2)) AS `Fee`,
         if(notEmpty(`AmountInTokenZeroString`), toUInt256OrZero(`AmountInTokenZeroString`), `ReservesZeroDeposited`) AS `AmountInTokenZero`,
         if(notEmpty(`AmountInTokenOneString`), toUInt256OrZero(`AmountInTokenOneString`), `ReservesOneDeposited`) AS `AmountInTokenOne`,
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'ReservesZeroDeposited'), `event_attributes`), 'value')) AS `ReservesZeroDeposited`,
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'ReservesOneDeposited'), `event_attributes`), 'value')) AS `ReservesOneDeposited`,
+        toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'ReservesZeroDeposited'), `event_attributes`), 2)) AS `ReservesZeroDeposited`,
+        toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'ReservesOneDeposited'), `event_attributes`), 2)) AS `ReservesOneDeposited`,
         if (`AmountInTokenZero` > `ReservesZeroDeposited`, toUInt256(`AmountInTokenZero` - `ReservesZeroDeposited`), 0) AS `ReservesZeroSwappedIn`,
         if (`AmountInTokenOne` > `ReservesOneDeposited`, toUInt256(`AmountInTokenOne` - `ReservesOneDeposited`), 0) AS `ReservesOneSwappedIn`,
         if (`AmountInTokenZero` < `ReservesZeroDeposited`, toUInt256(`ReservesZeroDeposited` - `AmountInTokenZero`), 0) AS `ReservesZeroSwappedOut`,
         if (`AmountInTokenOne` < `ReservesOneDeposited`, toUInt256(`ReservesOneDeposited` - `AmountInTokenOne`), 0) AS `ReservesOneSwappedOut`,
-        toUInt256OrZero(JSONExtractString(arrayFirst(x -> (JSONExtractString(x, 'key') = 'SharesMinted'), `event_attributes`), 'value')) AS `SharesMinted`
-    FROM spacebox.dex_message_event_action
+        toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'SharesMinted'), `event_attributes`), 2)) AS `SharesMinted`
+    FROM spacebox.preparsed_dex_message_event_action
     WHERE `action` = 'DepositLP'
 SETTINGS
     -- allow bigger blocks because transformation is easier

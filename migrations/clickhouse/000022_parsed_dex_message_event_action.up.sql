@@ -31,6 +31,41 @@ ORDER BY (
 )
 SETTINGS index_granularity = 8192;
 
+-- spacebox.dex_message_event_action view
+CREATE VIEW spacebox.dex_message_event_action (
+    `timestamp`         DateTime64(9),
+    `height`            Int64,
+    `block_part_index`  Int8,
+    `tx_index`          Int32,
+    `event_index`       Int32,
+    -- add computed sort key for easier event ordering
+    `sort_key`          Tuple(Int64, Int8, Int32, Int32),
+    -- event data
+    `type`              LowCardinality(String),
+    `action`            LowCardinality(String),
+    `attributes`        String
+) AS
+    SELECT
+        `timestamp`,
+        `height`,
+        `block_part_index`,
+        `tx_index`,
+        `event_index`,
+        -- add computed sort key for easier event ordering
+        `sort_key`,
+        -- event data
+        `type`,
+        `action`,
+        -- recreate attribute JSON string from parsed data
+        toJSONString(
+            arrayMap(
+                (attr) -> map('key', (attr).1, 'value', (attr).2, 'index', toString((attr).3)),
+                `attributes_parsed`
+            )
+        ) as `attributes`
+    FROM spacebox.parsed_dex_message_event_action;
+
+
 -- spacebox.dex_message_parsed_event_action_writer source
 
 CREATE MATERIALIZED VIEW spacebox.dex_message_parsed_event_action_writer TO spacebox.parsed_dex_message_event_action (

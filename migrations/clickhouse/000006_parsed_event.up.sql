@@ -38,7 +38,7 @@ ORDER BY (
     `tx_index`,
     `msg_part_index`
 )
-TTL timestamp + toIntervalDay(30)
+TTL toDateTime(timestamp) + toIntervalDay(30)
 SETTINGS index_granularity = 8192;
 
 -- spacebox.parsed_event_txs_writer source

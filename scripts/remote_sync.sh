@@ -47,7 +47,7 @@ while [[ -s "${PREFIX}_remote_syncing_rows.csv" ]]; do
             WITH numbered AS (
                 SELECT
                     height,
-                    row_number() OVER (ORDER BY height) AS rn,
+                    dense_rank() OVER (ORDER BY height) AS rn,
                     height - rn AS grp
                 FROM spacebox.$TABLE
                 WHERE height >= ${LAST_CONSECUTIVE_ROW:-0}

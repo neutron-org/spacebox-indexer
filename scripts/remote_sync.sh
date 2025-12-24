@@ -76,22 +76,24 @@ while [[ -s "${PREFIX}_remote_syncing_rows.csv" ]]; do
         LIMIT $ROWCOUNT
     " > "${PREFIX}_remote_syncing_rows.csv"
 
-    echo "start $(date -u +"%Y-%m-%dT%H:%M:%SZ"): $( cat "${PREFIX}_remote_syncing_rows.csv" )" >> "${PREFIX}_remote_sync_log.txt"
+    if [[ -s "${PREFIX}_remote_syncing_rows.csv" ]]; then
+        echo "start $(date -u +"%Y-%m-%dT%H:%M:%SZ"): $( cat "${PREFIX}_remote_syncing_rows.csv" )" >> "${PREFIX}_remote_sync_log.txt"
 
-    clickhouse-client --time --query "
-        INSERT INTO spacebox.$TABLE
-        SELECT *
-        FROM remote('host.docker.internal:19000', 'spacebox', '$TABLE', '$USERNAME', '$PASSWORD')
-        WHERE height IN ($( cat "${PREFIX}_remote_syncing_rows.csv" ))
-        ORDER BY height ASC
-        SETTINGS
-            optimize_read_in_order = 1,
-            max_bytes_before_external_group_by = 1e9, -- 1 GiB
-            max_bytes_before_external_sort = 1e9, -- 1 GiB
-            memory_usage_overcommit_max_wait_microseconds = 10000000; -- 10 seconds
-    "
+        clickhouse-client --time --query "
+            INSERT INTO spacebox.$TABLE
+            SELECT *
+            FROM remote('host.docker.internal:19000', 'spacebox', '$TABLE', '$USERNAME', '$PASSWORD')
+            WHERE height IN ($( cat "${PREFIX}_remote_syncing_rows.csv" ))
+            ORDER BY height ASC
+            SETTINGS
+                optimize_read_in_order = 1,
+                max_bytes_before_external_group_by = 1e9, -- 1 GiB
+                max_bytes_before_external_sort = 1e9, -- 1 GiB
+                memory_usage_overcommit_max_wait_microseconds = 10000000; -- 10 seconds
+        "
 
-    echo "stop  $(date -u +"%Y-%m-%dT%H:%M:%SZ"): $( cat "${PREFIX}_remote_syncing_rows.csv" )" >> "${PREFIX}_remote_sync_log.txt"
+        echo "stop  $(date -u +"%Y-%m-%dT%H:%M:%SZ"): $( cat "${PREFIX}_remote_syncing_rows.csv" )" >> "${PREFIX}_remote_sync_log.txt"
+    fi
 
     # pause
     sleep "$DELAY"

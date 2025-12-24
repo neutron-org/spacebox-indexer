@@ -6,7 +6,7 @@ set -euo pipefail
 USERNAME="$1"
 PASSWORD="$2"
 TABLE="$3"
-ROWCOUNT="${4:-10}"
+ROWCOUNT="${4:-100}"
 DELAY="${5:-1}"
 
 mkdir -p "/home/scripts/logs"

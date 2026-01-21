@@ -62,7 +62,8 @@ CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_withdraw_lp_writer
     `ReservesOneWithdrawn`  UInt256,
     `SharesRemoved`         UInt256
 ) AS
-    WITH JSONExtractArrayRaw(`attributes`) as `event_attributes`
+    WITH
+        `attributes_parsed` as `event_attributes`
     SELECT
         `timestamp`,
         `height`,
@@ -81,7 +82,7 @@ CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_withdraw_lp_writer
         toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'ReservesZeroWithdrawn'), `event_attributes`), 2)) AS `ReservesZeroWithdrawn`,
         toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'ReservesOneWithdrawn'), `event_attributes`), 2)) AS `ReservesOneWithdrawn`,
         toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'SharesRemoved'), `event_attributes`), 2)) AS `SharesRemoved`
-    FROM spacebox.preparsed_dex_message_event_action
+    FROM spacebox.parsed_dex_message_event_action
     WHERE `action` = 'WithdrawLP'
 SETTINGS
     -- allow bigger blocks because transformation is easier

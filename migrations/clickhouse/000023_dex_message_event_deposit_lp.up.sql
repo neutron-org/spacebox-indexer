@@ -76,7 +76,7 @@ CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_deposit_lp_writer 
     `SharesMinted`          UInt256
 ) AS
     WITH
-        JSONExtractArrayRaw(`attributes`) as `event_attributes`,
+        `attributes_parsed` as `event_attributes`,
         -- get possibly defined (since Neutron v6.0) attributes
         -- since (Neutron v8.0) these are now be Decimal strings that require regex extraction to get the correct integer
         extract(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'AmountInTokenZero'), `event_attributes`), 2), '^[0-9]+') AS `AmountInTokenZeroString`,
@@ -105,7 +105,7 @@ CREATE MATERIALIZED VIEW spacebox.preparsed_dex_message_event_deposit_lp_writer 
         if (`AmountInTokenZero` < `ReservesZeroDeposited`, toUInt256(`ReservesZeroDeposited` - `AmountInTokenZero`), 0) AS `ReservesZeroSwappedOut`,
         if (`AmountInTokenOne` < `ReservesOneDeposited`, toUInt256(`ReservesOneDeposited` - `AmountInTokenOne`), 0) AS `ReservesOneSwappedOut`,
         toUInt256OrZero(tupleElement(arrayFirst(x -> (tupleElement(x, 1) = 'SharesMinted'), `event_attributes`), 2)) AS `SharesMinted`
-    FROM spacebox.preparsed_dex_message_event_action
+    FROM spacebox.parsed_dex_message_event_action
     WHERE `action` = 'DepositLP'
 SETTINGS
     -- allow bigger blocks because transformation is easier

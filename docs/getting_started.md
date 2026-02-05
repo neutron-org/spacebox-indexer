@@ -80,6 +80,15 @@ sudo docker exec -it $(sudo docker ps -q --filter name=spacebox-clickhouse-1 ) c
 sudo docker exec -it $(sudo docker ps -q --filter name=spacebox-clickhouse-1 ) clickhouse-client --query "SELECT version()"
 ```
 
+#### Upgrading
+
+After updating the `docker-compose.yaml` file
+
+```shell
+# eg. updating clickhouse version in docker-compose
+docker compose up -d --force-recreate --no-deps clickhouse
+```
+
 #### Helpful SQL queries
 
 Get size of tables

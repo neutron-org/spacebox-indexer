@@ -288,6 +288,9 @@ ALTER TABLE spacebox.parsed_dex_message_event_action DELETE WHERE height = 37545
 ALTER TABLE spacebox.price_by_vault_denom DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.price_by_vault_denom_by_minute_agg DELETE WHERE height = 37545431;
 ALTER TABLE spacebox.raw_block_results DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.raw_block DELETE WHERE height = 37545431;
+ALTER TABLE spacebox.raw_block_txhash DELETE WHERE height = 37545431;
+-- then recrawl the affected height or sync it from another remote DB
 ```
 
 A remote Clickhouse server query using ENV vars passed to container

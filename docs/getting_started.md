@@ -290,16 +290,18 @@ ALTER TABLE spacebox.price_by_vault_denom_by_minute_agg DELETE WHERE height = 37
 ALTER TABLE spacebox.raw_block_results DELETE WHERE height = 37545431;
 ```
 
-A remote Clickhouse server query
+A remote Clickhouse server query using ENV vars passed to container
 
-```sql
+```shell
+docker exec -it $( docker ps -q --filter name=spacebox-clickhouse-1 ) clickhouse-client --param_user="$USER" --param_pass="$PASS" --query "
     SELECT *
     FROM remote(
         'host.docker.internal:19000',
         'spacebox',
         'dex_vaults_shares',
-        '${user: String}',
-        '${password: String}'
+        {user:String},
+        {pass:String}
     )
     LIMIT 1
+"
 ```

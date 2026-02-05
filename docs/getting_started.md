@@ -209,7 +209,7 @@ SELECT * FROM spacebox.raw_block_results
 WHERE height IN (SELECT height FROM missing_heights)
 ```
 
-#### Debugging quereies
+#### Debugging queries
 
 ##### Reattaching broken Kafka tables
 

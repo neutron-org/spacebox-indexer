@@ -144,6 +144,39 @@ See refreshable materialized views
 
 #### Checking data validity
 
+##### Checking for App Hash issues
+
+Use comparison between a local and remote DB to check if raw data does not match
+
+```shell
+# a query like this over 1,000,000 rows takes about 3 minutes to complete
+docker exec -it $( docker ps -q --filter name=spacebox-clickhouse-1 ) clickhouse-client --param_user="$USER" --param_pass="$PASS" --query "
+    WITH
+        remote_table as (
+            SELECT
+                height,
+                xxHash64(concat(txs_results, finalize_block_events)) as hash
+            FROM remote('host.docker.internal:19000', 'spacebox', 'raw_block_results', {user:String}, {pass:String})
+            WHERE height >= 42000000 AND height < (42000000 + 1000000)
+        ),
+        local_table as (
+            SELECT
+                height,
+                xxHash64(concat(txs_results, finalize_block_events)) as hash
+            FROM spacebox.raw_block_results
+            WHERE height >= 42000000 AND height < (42000000 + 1000000)
+        )
+    SELECT height
+    FROM local_table
+    INNER JOIN remote_table
+        ON remote_table.height = local_table.height
+    WHERE remote_table.hash != local_table.hash
+    ORDER BY height ASC
+    SETTINGS
+        optimize_read_in_order = 1
+"
+```
+
 ##### Find unparsed DEX row data
 
 There are very few rows without DEX data since the Supervaults started running,

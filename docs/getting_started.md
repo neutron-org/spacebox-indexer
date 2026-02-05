@@ -142,6 +142,73 @@ See refreshable materialized views
     SYSTEM REFRESH VIEW spacebox.dex_vaults_dex_balance_valued_daily_writer;
 ```
 
+#### Checking data validity
+
+##### Find unparsed DEX row data
+
+There are very few rows without DEX data since the Supervaults started running,
+these can be queried here:
+
+```sql
+WITH target_table as (SELECT DISTINCT height FROM spacebox.parsed_dex_message_event_action),
+height_sequence as (
+    -- note: Supervaults first started at height 28887908
+    SELECT arrayJoin(range(28887908, max(height) - 100)) AS height
+    FROM target_table
+),
+missing_heights as (
+    SELECT height
+    FROM height_sequence
+    LEFT JOIN target_table ON height = target_table.height
+    WHERE target_table.height = 0 OR target_table.height IS NULL
+)
+SELECT height FROM missing_heights;
+```
+
+The result should be about the following known heights without DEX events:
+
+```text
+    ┌───height─┐
+ 1. │ 36430004 │
+ 2. │ 36430005 │
+ 3. │ 36430006 │
+ 4. │ 36430007 │
+ 5. │ 36430008 │
+ 6. │ 36430009 │
+ 7. │ 46890955 │
+ 8. │ 46890956 │
+ 9. │ 46891066 │
+10. │ 46937998 │
+11. │ 46938071 │
+12. │ 46980535 │
+13. │ 46980592 │
+14. │ 46980624 │
+15. │ 46980625 │
+16. │ 46980896 │
+17. │ 47266466 │
+    └──────────┘
+```
+
+if more results than this are found then run a backfill query:
+
+```sql
+WITH target_table as (SELECT DISTINCT height FROM spacebox.parsed_dex_message_event_action),
+height_sequence as (
+    -- note: Supervaults first started at height 28887908
+    SELECT arrayJoin(range(28887908, max(height) - 100)) AS height
+    FROM target_table
+),
+missing_heights as (
+    SELECT height
+    FROM height_sequence
+    LEFT JOIN target_table ON height = target_table.height
+    WHERE target_table.height = 0 OR target_table.height IS NULL
+)
+INSERT INTO spacebox.raw_block_results_backfill
+SELECT * FROM spacebox.raw_block_results
+WHERE height IN (SELECT height FROM missing_heights)
+```
+
 #### Debugging quereies
 
 ##### Reattaching broken Kafka tables
